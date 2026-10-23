@@ -394,6 +394,8 @@ class BrowserUITests(HTTPTests):
         self.assert_phase("complete")
         self.assertEqual(self.page.locator("#folder-label").input_value(), "Synthetic quiz label")
         self.assertTrue(self.page.locator("#keep-canvas-open").is_checked())
+        self.assertEqual(self.page.locator("#canvas-url").input_value(), "https://canvas-fixture.invalid/")
+        self.assertEqual(self.page.locator("#output").input_value(), str(self.output.resolve()))
         self.page.locator("#folder-label").fill("Second synthetic quiz")
         self.page.wait_for_timeout(900)  # Polling must not overwrite the edit.
         self.assertEqual(self.page.locator("#folder-label").input_value(), "Second synthetic quiz")

@@ -59,6 +59,8 @@
     if (state.run_id && labelRun !== state.run_id) {
       $("folder-label").value = state.folder_label || "";
       $("keep-canvas-open").checked = !!state.keep_browser_open;
+      if (state.canvas_url) $("canvas-url").value = state.canvas_url;
+      if (state.output_base) $("output").value = state.output_base;
       labelRun = state.run_id;
     }
     if (!modeRestored || active) {

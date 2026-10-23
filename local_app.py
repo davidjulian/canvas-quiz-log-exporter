@@ -127,6 +127,7 @@ class LocalApp:
                       "first_file": "", "archive_ready": False, "warning_count": 0,
                       "key_ready": False, "export_mode": "coded",
                       "folder_label": "",
+                      "canvas_url": DEFAULT_URL, "output_base": "",
                       "keep_browser_open": False, "browser_open": False,
                       "default_browser": "chrome" if sys.platform == "darwin" else "msedge",
                       "error": "", "run_id": "", "version": capture.VERSION}
@@ -187,6 +188,7 @@ class LocalApp:
                 self.state.update(phase="opening", saved=0, total=0, names=[], output=str(out),
                                   first_file="", archive_ready=False, warning_count=0, error="",
                                   key_ready=False, export_mode=mode, folder_label=label,
+                                  canvas_url=url, output_base=str(out.parent),
                                   keep_browser_open=keep_open, run_id=secrets.token_hex(8))
                 # A quit during a browser operation must allow cleanup and ZIP
                 # preservation to finish even after the HTTP listener closes.
