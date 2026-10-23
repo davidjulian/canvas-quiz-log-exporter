@@ -1,0 +1,24 @@
+# Do not commit local environments, sessions, records, keys or downloads.
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.env
+.env.*
+private/
+logs/
+analysis/
+private-work/
+profile/
+BrowserProfile/
+quiz-logs-*/
+quick-export*/
+**/name_key.csv
+**/names.csv
+**/manifest.json
+*.zip
+*.har
+*.trace
+*.log
+.DS_Store
+Thumbs.db
