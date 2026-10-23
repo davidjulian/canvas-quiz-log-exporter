@@ -2,11 +2,13 @@
 
 Version 0.11.0, October 23, 2026.
 
+Windows verification: the full 72-test suite passed with none skipped in 93 seconds. After the final settings restoration adjustment, all 25 local interface tests passed with none skipped in 61 seconds. Browser tests use invented records, temporary profiles and temporary output folders.
+
 Folder label update: optional quiz/folder label in setup, portable child-folder naming with a bounded UTF-8 length, date/time and a random suffix. Blank labels preserve the default. Path separators cannot escape the selected output location. The label is locked during a run, restored on refresh, and editable for a subsequent run. Coded archive tests verify it is absent from ZIP contents; repeated-run tests verify earlier exports are preserved. All verification uses invented records and temporary output folders.
 
 Browser reuse update: optional keep-open setting defaults to false. Successful retained runs use the same Playwright worker and browser context for a new run; the page is not reset when address and browser are unchanged. Integration tests verify one browser launch across successive runs, the previous export remaining intact, default closure and Stop closure. A worker test verifies Quit closes an idle retained context. No credentials, session cookies or storage are extracted to implement reuse.
 
-The same automated workflow runs on Linux plus Intel and Apple silicon macOS: [workflow results](https://github.com/davidjulian/canvas-quiz-log-exporter/actions/workflows/tests.yml). Native file dialog and Finder limitations below still apply.
+Mac verification for 0.11.0: all 72 tests passed with none skipped on both Intel and Apple silicon. Linux unit checks also passed. [Successful workflow and tested source commit](https://github.com/davidjulian/canvas-quiz-log-exporter/actions/runs/40039199219). Native file dialog and Finder limitations below still apply.
 
 ## Version 0.10.0 platform baseline
 
