@@ -39,7 +39,9 @@ class LocalLogicTests(unittest.TestCase):
 
     def test_output_never_overwrites_and_excludes_profile_tree(self):
         with tempfile.TemporaryDirectory() as temp:
-            base = Path(temp)
+            # macOS /var is a symlink to /private/var. Compare actual locations,
+            # matching the app's canonicalization before its privacy checks.
+            base = Path(temp).resolve()
             profile = base / "private" / "profile"
             profile.mkdir(parents=True)
             approved = base / "approved"
