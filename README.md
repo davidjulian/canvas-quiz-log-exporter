@@ -2,7 +2,7 @@
 
 A local Windows app for downloading the displayed event text from Canvas **New Quizzes**. It opens each **View Log** on one Moderate page, saves the text, and returns to the student list. It performs **no analysis**.
 
-[Download the latest release](https://github.com/davidjulian/canvas-quiz-log-exporter/releases/latest)
+[Download & setup website](https://davidjulian.github.io/canvas-quiz-log-exporter/) · [Download the latest release](https://github.com/davidjulian/canvas-quiz-log-exporter/releases/latest)
 
 Version 0.9.0. Requires **Windows, Python 3.10 or newer, and installed Microsoft Edge or Google Chrome**. This is a local Python app, not a standalone executable or a hosted Canvas service. It uses your own authorized instructor browser session; no Canvas API token is requested.
 
