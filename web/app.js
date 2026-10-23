@@ -9,6 +9,7 @@
   let busy = false;
   let modeRestored = false;
   let browserRestored = false;
+  let labelRun = "";
   $("about-open").addEventListener("click", () => $("about-dialog").showModal());
   $("about-close").addEventListener("click", () => $("about-dialog").close());
   const terminal = new Set(["idle", "complete", "stopped", "error"]);
@@ -55,6 +56,11 @@
     }
     const phase = state.phase;
     const active = !terminal.has(phase);
+    if (state.run_id && labelRun !== state.run_id) {
+      $("folder-label").value = state.folder_label || "";
+      $("keep-canvas-open").checked = !!state.keep_browser_open;
+      labelRun = state.run_id;
+    }
     if (!modeRestored || active) {
       $(state.export_mode === "named" ? "mode-named" : "mode-coded").checked = true;
       modeRestored = true;
@@ -68,8 +74,11 @@
     $("status").textContent = status;
     $("error").textContent = state.error || "";
     show("error", !!state.error);
-    for (const id of ["canvas-url", "output", "browse", "browser", "launch"]) $(id).disabled = active || busy;
-    $("launch").textContent = phase === "idle" ? "Open Canvas" : "Open Canvas for a new run";
+    for (const id of ["canvas-url", "output", "folder-label", "keep-canvas-open", "browse", "browser", "launch"]) $(id).disabled = active || busy;
+    const supportsRunOptions = typeof state.folder_label === "string" && typeof state.keep_browser_open === "boolean";
+    show("update-note", !supportsRunOptions);
+    if (!supportsRunOptions) for (const id of ["launch", "folder-label", "keep-canvas-open"]) $(id).disabled = true;
+    $("launch").textContent = phase === "idle" ? "Open Canvas" : state.browser_open ? "Use open Canvas for a new run" : "Open Canvas for a new run";
     show("welcome", phase === "idle");
     show("navigate", phase === "navigate");
     show("review", phase === "review");
@@ -128,7 +137,7 @@
       ? (state.archive_ready ? "named-logs.zip contains student names and original dates, times and event text. No key was created." : "Named downloads are in logs/. No student coding or name key is used.")
       : (state.archive_ready ? "coded-logs.zip contains the downloaded text files. The private name key is excluded." : "Downloaded text is in logs/. The name key and full captures stay in private/.");
     $("output-privacy").textContent = named ? "These downloads contain identified student records. Use only storage and services authorized for their required classification and follow institutional privacy and FERPA rules." : "Keep private/ and name_key.csv private. Review coded files before sharing: identifying details can remain. This app does not certify FERPA compliance.";
-    $("result-description").textContent = `${state.saved} of ${state.total} displayed logs saved. ${state.archive_ready ? "Your download ZIP is ready." : "Check the output folder for completed files."}`;
+    $("result-description").textContent = `${state.saved} of ${state.total} displayed logs saved. ${state.archive_ready ? "Your download ZIP is ready." : "Check the output folder for completed files."}${state.browser_open ? " Canvas remains open. Open another quiz and go to Build → Moderate, update the folder label, then select Use open Canvas for a new run." : ""}`;
     show("open-key", !!state.key_ready);
     show("duplicates", state.warning_count > 0);
     $("activity").textContent = active ? (phase === "checking" || phase === "review" || phase === "navigate" ? "Waiting for your next step." : "Local collection is running.") : "No collection is running.";
@@ -153,7 +162,7 @@
   }
   $("setup").addEventListener("submit", event => {
     event.preventDefault();
-    action("launch", {url: $("canvas-url").value.trim(), output: $("output").value.trim(), browser: $("browser").value, export_mode: $("mode-named").checked ? "named" : "coded"});
+    action("launch", {url: $("canvas-url").value.trim(), output: $("output").value.trim(), folder_label: $("folder-label").value.trim(), keep_browser_open: $("keep-canvas-open").checked, browser: $("browser").value, export_mode: $("mode-named").checked ? "named" : "coded"});
   });
   $("browse").addEventListener("click", async () => {
     $("browse").disabled = true; localError("");

@@ -1,6 +1,14 @@
 # Validation
 
-Version 0.10.0, October 23, 2026.
+Version 0.11.0, October 23, 2026.
+
+Folder label update: optional quiz/folder label in setup, portable child-folder naming with a bounded UTF-8 length, date/time and a random suffix. Blank labels preserve the default. Path separators cannot escape the selected output location. The label is locked during a run, restored on refresh, and editable for a subsequent run. Coded archive tests verify it is absent from ZIP contents; repeated-run tests verify earlier exports are preserved. All verification uses invented records and temporary output folders.
+
+Browser reuse update: optional keep-open setting defaults to false. Successful retained runs use the same Playwright worker and browser context for a new run; the page is not reset when address and browser are unchanged. Integration tests verify one browser launch across successive runs, the previous export remaining intact, default closure and Stop closure. A worker test verifies Quit closes an idle retained context. No credentials, session cookies or storage are extracted to implement reuse.
+
+The same automated workflow runs on Linux plus Intel and Apple silicon macOS: [workflow results](https://github.com/davidjulian/canvas-quiz-log-exporter/actions/workflows/tests.yml). Native file dialog and Finder limitations below still apply.
+
+## Version 0.10.0 platform baseline
 
 Windows verification for 0.10.0: all 67 tests passed with none skipped in 86 seconds using Python 3.11 and Microsoft Edge. These include the full coded and named workflows and the new platform tests.
 

@@ -4,7 +4,7 @@ A local Windows and macOS app for downloading the displayed event text from Canv
 
 [Downloads and setup website](https://davidjulian.github.io/canvas-quiz-log-exporter/) · [Release files](https://github.com/davidjulian/canvas-quiz-log-exporter/releases/latest)
 
-Version 0.10.0. Requires **Windows 11+ or macOS 14+ (Intel or Apple silicon), Python 3.10 or newer, and installed Microsoft Edge or Google Chrome**. The local interface can open in your usual browser, but the dedicated Canvas window must use Edge or Chrome; Safari is not supported for collection. This is a local Python app, not a standalone executable or a hosted Canvas service. It uses your own authorized instructor browser session; no Canvas API token is requested.
+Version 0.11.0. Requires **Windows 11+ or macOS 14+ (Intel or Apple silicon), Python 3.10 or newer, and installed Microsoft Edge or Google Chrome**. The local interface can open in your usual browser, but the dedicated Canvas window must use Edge or Chrome; Safari is not supported for collection. This is a local Python app, not a standalone executable or a hosted Canvas service. It uses your own authorized instructor browser session; no Canvas API token is requested.
 
 ## Install and open
 
@@ -47,13 +47,19 @@ Choosing a mode controls the file contents. It does not encrypt files, authorize
 
 ## Download logs
 
-1. Confirm the **Canvas URL**, defaulting to https://ufl.instructure.com/. Choose an existing output folder with **Browse** or paste a folder path. Select the export mode. Each run creates a new folder inside the selected location.
+1. Confirm the **Canvas URL**, defaulting to https://ufl.instructure.com/. Choose an existing output folder with **Browse** or paste a folder path. Optionally enter a **Quiz name or folder label**, then select the export mode. Each run creates a new folder inside the selected location. For example, `PCB3713C Exam 2` produces `PCB3713C_Exam_2-20261023-153000-a1b2c3`. A date, time and random suffix keep runs separate. Leave the label blank to use the original `quiz-logs-...` name. The label can be edited before each new run; it is fixed during collection. Characters unsuitable for filenames are replaced and long labels shortened. The label names the local run folder only; it is not inserted into coded log text or ZIP filenames/contents.
 2. Click **Open Canvas**. In the separate dedicated browser, sign in to Canvas and open your completed New Quiz, then go to **Build → Moderate**. Set any desired filters and students per page setting and wait for the student list to load. Keep only one Moderate list open in this browser.
 3. Return to the app and click **I'm on Moderate — find logs**. Check the displayed count and proposed student names against Moderate, correct names on screen, check the review box and click **Start collection**.
 4. Check the first downloaded log against Canvas, including the final event and any need for more event pages, scrolling or expansion. In **coded mode**, the **Open private name key** button is available at this step so you can check the ID-to-name association. In **named mode**, check the student's name directly in the downloaded file; no key or ID confirmation is required.
 5. If the first download is adequate, check the review box and click **Checked — collect remaining logs**. Otherwise use **Stop**. Leave the dedicated Canvas window alone while downloads run.
 6. Click **Open output folder** to see logs/ and the selected mode's ZIP. **Stop** preserves completed files and creates a partial ZIP where possible. It may wait for the current browser operation to finish. Every new run starts at the first displayed control; there is no skip or resume mode.
 7. Use **Quit local app** when finished. Closing or refreshing the web tab alone does not stop a run.
+
+### Collect another quiz in the same Canvas window
+
+**Keep Canvas open for another quiz** is optional and off by default. When checked before starting, the separate Canvas window stays open after a successful collection. Open another completed quiz there and go to **Build → Moderate**. In the app, update the folder label and other settings, then select **Use open Canvas for a new run** and follow the normal name and first-log checks. The app reuses the same browser context and does not send it back to the Canvas home page if the Canvas address and browser selection are unchanged. Each run still gets a separate output folder and fresh coded IDs.
+
+With the option unchecked, the Canvas window closes after collection as before. Stop, collection errors and **Quit local app** also close it. Closing Canvas is not the same as signing out; the private local profile can retain authentication state. Keeping a window open is convenient on your own secured computer, but close it or quit when leaving the computer or using a shared device. Institutional session expiry and sign-in policies still apply. Changing the browser selection opens a new dedicated browser; changing the Canvas address navigates to that address.
 
 The **About** button explains both modes, the workflow and privacy responsibilities. The internal page-loading check runs automatically and is not a user setting.
 

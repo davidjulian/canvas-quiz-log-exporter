@@ -34,6 +34,10 @@
         <div class="folder-row"><input id="output" type="text" required placeholder="Choose an approved folder" autocomplete="off" spellcheck="false"><button type="button" id="browse" class="secondary">Browse…</button></div>
         <p class="hint">Each run creates a new folder here.</p>
 
+        <label for="folder-label">Quiz name or folder label <span class="hint">(optional)</span></label>
+        <input id="folder-label" type="text" maxlength="200" placeholder="e.g., PCB3713C Exam 2" autocomplete="off" spellcheck="false" aria-describedby="folder-label-help">
+        <p id="folder-label-help" class="hint">Used only for the output folder name. A date and unique suffix are added automatically. Leave blank for the default name.</p>
+
         <fieldset id="export-modes" class="export-modes"><legend>Export mode</legend>
           <label class="mode-option"><input id="mode-coded" type="radio" name="export-mode" value="coded" checked><span><strong>Coded logs</strong><small>Random IDs, identifier removal and a separate private name key.</small></span></label>
           <label class="mode-option"><input id="mode-named" type="radio" name="export-mode" value="named"><span><strong>Named logs</strong><small>Student names and original dates and times. No coding or name key.</small></span></label>
@@ -41,6 +45,8 @@
         <p id="mode-note" class="hint">Review coded files before sharing. The private folder still contains identifying records.</p>
 
         <details><summary>Browser</summary><label class="sr-only" for="browser">Dedicated Canvas browser</label><select id="browser"><option value="msedge">Microsoft Edge</option><option value="chrome">Google Chrome</option></select><p class="hint">Opens a separate window for Canvas. Sign in there yourself.</p></details>
+        <label class="check-row"><input id="keep-canvas-open" type="checkbox" aria-describedby="keep-canvas-help"><span>Keep Canvas open for another quiz</span></label>
+        <p id="keep-canvas-help" class="hint">After a successful collection only. Quit local app closes the window. Canvas can still expire your session.</p>
         <button type="submit" class="primary wide" id="launch">Open Canvas</button>
       </form>
       <div class="privacy-note"><strong>Your records stay with you.</strong><p>Logs and names are processed locally. No student data is sent to an AI service. Canvas still uses your normal institutional sign-in and services.</p></div>
@@ -51,6 +57,7 @@
       <p id="stage-description">Choose your Canvas address and output folder, then open Canvas to begin.</p>
       <div id="error" class="notice error" role="alert" hidden></div>
       <div id="local-error" class="notice error" role="alert" hidden></div>
+      <div id="update-note" class="notice" hidden>Updated app files are available. After your collection finishes, use Quit local app and reopen with the Start App launcher to enable folder labels and keeping Canvas open.</div>
 
       <section id="welcome" class="welcome">
         <div class="document-icon" aria-hidden="true">≡</div>

@@ -9,7 +9,7 @@ import threading
 import time
 import unittest
 import zipfile
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import local_app as web
@@ -70,6 +70,74 @@ class LocalLogicTests(unittest.TestCase):
         self.assertEqual(app.pending[1]["names"][1]["name"], "=Synthetic Example")
         with self.assertRaises(web.UIError):
             app.command("start", {})
+
+    def test_folder_labels_remain_one_portable_unique_child_folder(self):
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp).resolve()
+            profile = base / "profile"
+            approved = base / "approved"
+            approved.mkdir()
+            for label in ("Exam 2", "../Exam: 2/Section A\\Fall", "CON", "Évaluation 2", "測" * 200):
+                with self.subTest(label=label):
+                    first = web.output_folder(str(approved), profile, label)
+                    second = web.output_folder(str(approved), profile, label)
+                    self.assertEqual(first.parent, approved)
+                    self.assertNotEqual(first, second)
+                    self.assertLess(len(first.name.encode("utf-8")), 160)
+                    self.assertFalse(first.exists())
+                    self.assertNotRegex(first.name, r'[<>:"/\\|?*]')
+            self.assertTrue(web.output_folder(str(approved), profile, "").name.startswith("quiz-logs-"))
+            self.assertTrue(web.output_folder(str(approved), profile, "Exam 2").name.startswith("Exam_2-"))
+            for bad in (None, [], "x" * 201, "../", "???"):
+                with self.subTest(bad=bad), self.assertRaises(web.UIError):
+                    web.output_folder(str(approved), profile, bad)
+
+    def test_invalid_folder_label_does_not_launch_browser_or_create_output(self):
+        with tempfile.TemporaryDirectory() as temp:
+            app = web.LocalApp(profile=Path(temp) / "profile")
+            with self.assertRaises(web.UIError):
+                app.command("launch", {"url": web.DEFAULT_URL, "output": temp, "folder_label": []})
+            self.assertIsNone(app.worker)
+            self.assertEqual(app.snapshot()["phase"], "idle")
+            self.assertEqual(list(Path(temp).iterdir()), [])
+
+    def test_keep_open_is_opt_in_and_quit_blocks_new_runs(self):
+        app = web.LocalApp()
+        self.assertFalse(app.snapshot()["keep_browser_open"])
+        with self.assertRaises(web.UIError):
+            app.command("launch", {"url": web.DEFAULT_URL, "keep_browser_open": "yes"})
+        self.assertIsNone(app.worker)
+        app.shutdown()
+        self.assertTrue(app.stop_event.is_set())
+        with self.assertRaisesRegex(web.UIError, "closing"):
+            app.command("launch", {})
+
+    def test_quit_closes_an_idle_retained_browser_on_its_own_worker(self):
+        page, context, manager = MagicMock(), MagicMock(), MagicMock()
+        context.pages = [page]
+        page.wait_for_timeout.side_effect = lambda _: time.sleep(.01)
+        manager.__enter__.return_value.chromium.launch_persistent_context.return_value = context
+        with tempfile.TemporaryDirectory() as temp:
+            app = web.LocalApp(profile=Path(temp) / "profile")
+            approved = Path(temp) / "output"
+            approved.mkdir()
+            with patch("playwright.sync_api.sync_playwright", return_value=manager), \
+                    patch.object(web, "WebCapture"), \
+                    patch.object(web.capture, "choose_moderate_page", return_value=page), \
+                    patch.object(app, "await_action"):
+                app.command("launch", {"url": web.DEFAULT_URL, "output": str(approved), "keep_browser_open": True})
+                try:
+                    deadline = time.monotonic() + 5
+                    while not app.snapshot()["browser_open"] and time.monotonic() < deadline:
+                        time.sleep(.01)
+                    self.assertTrue(app.snapshot()["browser_open"])
+                    self.assertEqual(app.snapshot()["phase"], "complete")
+                finally:
+                    app.shutdown()
+                    app.worker.join(5)
+                self.assertFalse(app.worker.is_alive())
+                self.assertFalse(app.snapshot()["browser_open"])
+                context.close.assert_called_once()
 
     def test_stop_releases_waiting_worker(self):
         app = web.LocalApp()
@@ -189,7 +257,7 @@ class BrowserUITests(HTTPTests):
         self.output.mkdir()
 
     def tearDown(self):
-        self.app.command("stop", {})
+        self.app.shutdown()
         if self.app.worker:
             self.app.worker.join(30)
         self.context.close()
@@ -207,11 +275,25 @@ class BrowserUITests(HTTPTests):
             self.page.wait_for_timeout(50)
         self.assertEqual(self.app.snapshot()["phase"], phase)
 
-    def launch_synthetic(self, mode="coded"):
+    def test_updated_assets_request_restart_for_an_older_running_app(self):
+        self.app.state.pop("folder_label")
+        self.app.state.pop("keep_browser_open")
+        self.page.reload()
+        self.page.locator("#update-note").wait_for(state="visible")
+        self.assertTrue(self.page.locator("#launch").is_disabled())
+        self.assertFalse(self.page.locator("#quit").is_disabled())
+
+    def launch_synthetic(self, mode="coded", label="", keep_open=False):
         from playwright.sync_api import BrowserType
         original = BrowserType.launch_persistent_context
+        self.synthetic_launches = 0
+        self.synthetic_closes = 0
         def launch(browser_type, user_data_dir, **kwargs):
+            self.synthetic_launches += 1
             context = original(browser_type, user_data_dir, channel=os.environ.get("CANVAS_TEST_BROWSER", "msedge" if sys.platform == "win32" else "chrome"), headless=True, accept_downloads=False)
+            def closed(_):
+                self.synthetic_closes += 1
+            context.on("close", closed)
             context.route("**/*", lambda route: route.fulfill(status=200, content_type="text/html", body=FIXTURE)
                           if route.request.url.split('#')[0] == "https://canvas-fixture.invalid/" else route.abort())
             return context
@@ -220,6 +302,10 @@ class BrowserUITests(HTTPTests):
         self.addCleanup(self.launch_patch.stop)
         self.page.locator("#canvas-url").fill("https://canvas-fixture.invalid/")
         self.page.locator("#output").fill(str(self.output))
+        self.page.locator("#folder-label").fill(label)
+        self.assertFalse(self.page.locator("#keep-canvas-open").is_checked())
+        if keep_open:
+            self.page.locator("#keep-canvas-open").check()
         self.assertTrue(self.page.locator("#mode-coded").is_checked())
         if mode == "named":
             self.page.locator("#mode-named").check()
@@ -228,12 +314,14 @@ class BrowserUITests(HTTPTests):
         self.assert_phase("navigate")
         self.assertIn("then go to Build → Moderate", self.page.locator("#navigate").inner_text())
         self.assertTrue(self.page.locator("#mode-named").is_disabled())
+        self.assertTrue(self.page.locator("#folder-label").is_disabled())
+        self.assertTrue(self.page.locator("#keep-canvas-open").is_disabled())
         self.page.locator("#moderate").click()
         self.page.locator("#name-rows input").nth(2).wait_for()
         self.assert_phase("review")
 
     def test_entire_web_workflow_coded_files_and_private_key(self):
-        self.launch_synthetic()
+        self.launch_synthetic(label="Synthetic quiz label", keep_open=True)
         self.assertEqual(self.page.locator("#name-rows input").count(), 3)
         self.assertTrue(self.page.locator("#start").is_disabled())
         # Edited formula-leading names must survive CSV and be displayed as text.
@@ -258,7 +346,10 @@ class BrowserUITests(HTTPTests):
         state = self.app.snapshot()
         self.assertEqual(state["saved"], 3)
         self.assertTrue(state["archive_ready"])
+        self.assertTrue(state["browser_open"])
+        self.assertEqual(self.synthetic_closes, 0)
         out = Path(state["output"])
+        self.assertTrue(out.name.startswith("Synthetic_quiz_label-"))
         manifest = json.loads((out / "private" / "manifest.json").read_text())
         self.assertTrue(manifest["page_loop_completed"])
         self.assertFalse(manifest["all_students_verified"])
@@ -285,6 +376,8 @@ class BrowserUITests(HTTPTests):
         self.assertTrue(self.page.locator("#open-key").is_visible())
         with zipfile.ZipFile(out / "coded-logs.zip") as archive:
             all_text = "\n".join(archive.read(name).decode("utf-8") for name in archive.namelist())
+            self.assertNotIn("Synthetic quiz label", all_text)
+            self.assertNotIn("Synthetic_quiz_label", all_text)
             for private in ("Synthetic corrected name", "Synthetic student", "September", "2026", "11:46", "12:20", "student_name", "control_position"):
                 self.assertNotIn(private, all_text)
             self.assertIn("Finished [calendar date and clock time omitted]", all_text)
@@ -299,9 +392,28 @@ class BrowserUITests(HTTPTests):
         # Refresh keeps the local session and completed output details.
         self.page.reload()
         self.assert_phase("complete")
+        self.assertEqual(self.page.locator("#folder-label").input_value(), "Synthetic quiz label")
+        self.assertTrue(self.page.locator("#keep-canvas-open").is_checked())
+        self.page.locator("#folder-label").fill("Second synthetic quiz")
+        self.page.wait_for_timeout(900)  # Polling must not overwrite the edit.
+        self.assertEqual(self.page.locator("#folder-label").input_value(), "Second synthetic quiz")
+        self.page.locator("#canvas-url").fill("https://canvas-fixture.invalid/")
+        self.page.locator("#output").fill(str(self.output))
+        self.page.locator("#keep-canvas-open").uncheck()
+        self.page.locator("#launch").click()
+        self.page.locator("#moderate").wait_for(state="visible")
+        self.assert_phase("navigate")
+        self.assertTrue(Path(self.app.snapshot()["output"]).name.startswith("Second_synthetic_quiz-"))
+        self.assertNotEqual(self.app.snapshot()["output"], str(out))
+        self.assertEqual(self.synthetic_launches, 1)
+        self.assertTrue((out / "coded-logs.zip").is_file())
+        self.page.locator("#stop").click()
+        self.assert_phase("stopped")
+        self.assertFalse(self.app.snapshot()["browser_open"])
+        self.assertEqual(self.synthetic_closes, 1)
 
     def test_stop_after_first_retains_partial_archive(self):
-        self.launch_synthetic()
+        self.launch_synthetic(keep_open=True)
         self.page.locator("#names-reviewed").check()
         self.page.locator("#start").click()
         self.page.locator("#open-first").wait_for(state="visible", timeout=30000)
@@ -313,6 +425,8 @@ class BrowserUITests(HTTPTests):
         self.assertFalse(manifest["page_loop_completed"])
         self.assertEqual(manifest["error"], "stopped_by_user")
         self.assertTrue(state["archive_ready"])
+        self.assertFalse(state["browser_open"])
+        self.assertEqual(self.synthetic_closes, 1)
         self.assertTrue((Path(state["output"]) / "coded-logs.zip").is_file())
 
     def test_named_workflow_has_no_key_or_id_confirmation(self):
@@ -330,6 +444,8 @@ class BrowserUITests(HTTPTests):
         self.assert_phase("complete", timeout=45000)
         state = self.app.snapshot()
         self.assertEqual(state["export_mode"], "named")
+        self.assertFalse(state["browser_open"])
+        self.assertEqual(self.synthetic_closes, 1)
         out = Path(state["output"])
         self.assertFalse((out / "private" / "name_key.csv").exists())
         self.assertFalse((out / "coded-logs.zip").exists())

@@ -8,6 +8,7 @@ import csv
 import hmac
 import json
 import os
+import re
 import secrets
 import subprocess
 import sys
@@ -81,7 +82,23 @@ def open_path(path):
         raise UIError("Open the displayed output path in your file manager.")
 
 
-def output_folder(value, profile):
+def folder_label(value):
+    if not isinstance(value, str) or len(value) > 200:
+        raise UIError("Use a folder label of 200 characters or fewer.")
+    label = capture.normalize_name(value)
+    if not label:
+        return ""
+    label = "".join(c if c.isalnum() or c in " -_()" else "_" for c in label)
+    label = re.sub(r"[\s_]+", "_", label).strip(" _-")
+    # Leave room for the timestamp/suffix on both Windows and Mac filesystems.
+    label = label.encode("utf-8")[:100].decode("utf-8", errors="ignore").rstrip(" _-")
+    if not any(c.isalnum() for c in label):
+        raise UIError("Include at least one letter or number in the folder label, or leave it blank.")
+    return label
+
+
+def output_folder(value, profile, label=""):
+    prefix = folder_label(label) or "quiz-logs"
     if not isinstance(value, str) or not value.strip() or len(value) > 3000:
         raise UIError("Choose an existing output folder.")
     try:
@@ -93,7 +110,7 @@ def output_folder(value, profile):
             raise UIError("Choose an output folder separate from the browser profile.")
     except (OSError, ValueError):
         raise UIError("That output folder could not be opened. Choose another existing folder.") from None
-    return base / ("quiz-logs-" + datetime.now().strftime("%Y%m%d-%H%M%S-") + secrets.token_hex(3))
+    return base / (prefix + "-" + datetime.now().strftime("%Y%m%d-%H%M%S-") + secrets.token_hex(3))
 
 
 class LocalApp:
@@ -101,12 +118,16 @@ class LocalApp:
         self.profile = Path(profile) if profile else profile_folder()
         self.condition = threading.Condition(threading.RLock())
         self.stop_event = threading.Event()
+        self.quit_event = threading.Event()
         self.worker = None
+        self.next_run = None
         self.pending = None
         self.dialog_lock = threading.Lock()
         self.state = {"phase": "idle", "saved": 0, "total": 0, "names": [], "output": "",
                       "first_file": "", "archive_ready": False, "warning_count": 0,
                       "key_ready": False, "export_mode": "coded",
+                      "folder_label": "",
+                      "keep_browser_open": False, "browser_open": False,
                       "default_browser": "chrome" if sys.platform == "darwin" else "msedge",
                       "error": "", "run_id": "", "version": capture.VERSION}
 
@@ -123,6 +144,12 @@ class LocalApp:
         if self.stop_event.is_set():
             raise capture.CaptureError("stopped_by_user")
 
+    def shutdown(self):
+        self.quit_event.set()
+        self.stop_event.set()
+        with self.condition:
+            self.condition.notify_all()
+
     def await_action(self, phase, **values):
         with self.condition:
             self.pending = None
@@ -138,7 +165,11 @@ class LocalApp:
     def command(self, action, payload):
         with self.condition:
             if action == "launch":
-                if self.worker and self.worker.is_alive():
+                if self.quit_event.is_set():
+                    raise UIError("The local app is closing. Reopen it using the Start App launcher.")
+                reuse = bool(self.worker and self.worker.is_alive() and
+                             self.state["browser_open"] and self.state["phase"] in TERMINAL)
+                if self.worker and self.worker.is_alive() and not reuse:
                     raise UIError("A run is already active. Finish it or stop it before opening another.")
                 url = validate_url(payload.get("url"))
                 channel = payload.get("browser", self.state["default_browser"])
@@ -147,15 +178,25 @@ class LocalApp:
                 mode = payload.get("export_mode", "coded")
                 if mode not in ("coded", "named"):
                     raise UIError("Choose coded logs or named logs.")
-                out = output_folder(payload.get("output"), self.profile)
+                keep_open = payload.get("keep_browser_open", False)
+                if not isinstance(keep_open, bool):
+                    raise UIError("Choose whether to keep Canvas open after collection.")
+                label = payload.get("folder_label", "")
+                out = output_folder(payload.get("output"), self.profile, label)
                 self.stop_event.clear()
                 self.state.update(phase="opening", saved=0, total=0, names=[], output=str(out),
                                   first_file="", archive_ready=False, warning_count=0, error="",
-                                  key_ready=False, export_mode=mode, run_id=secrets.token_hex(8))
+                                  key_ready=False, export_mode=mode, folder_label=label,
+                                  keep_browser_open=keep_open, run_id=secrets.token_hex(8))
                 # A quit during a browser operation must allow cleanup and ZIP
                 # preservation to finish even after the HTTP listener closes.
-                self.worker = threading.Thread(target=self.run, args=(url, out, channel, mode), daemon=False)
-                self.worker.start()
+                options = (url, out, channel, mode, keep_open)
+                if reuse:
+                    self.next_run = options
+                    self.condition.notify_all()
+                else:
+                    self.worker = threading.Thread(target=self.run, args=options, daemon=False)
+                    self.worker.start()
                 return {}
             if action == "stop":
                 if self.state["phase"] not in TERMINAL:
@@ -189,51 +230,102 @@ class LocalApp:
             self.condition.notify_all()
             return {}
 
-    def run(self, url, out, channel, mode="coded"):
-        collector, context = None, None
-        final_phase, error_message = "complete", ""
+    def run(self, url, out, channel, mode="coded", keep_open=False):
+        # One worker owns Playwright for the entire lifetime of its browser.
+        # HTTP threads may queue a new run but never touch the context directly.
+        context = None
+        previous_url = previous_channel = None
         try:
             from playwright.sync_api import sync_playwright
             with sync_playwright() as playwright:
                 try:
-                    try:
-                        context = playwright.chromium.launch_persistent_context(
-                            str(self.profile), channel=channel, headless=False, accept_downloads=False)
-                    except Exception:
-                        raise capture.CaptureError("browser_launch_failed") from None
-                    context.set_default_timeout(10000)
-                    page = context.pages[0] if context.pages else context.new_page()
-                    page.goto(url, wait_until="domcontentloaded", timeout=60000)
-                    self.await_action("navigate")
-                    def one_tab_only(_):
-                        raise capture.CaptureError("multiple_moderate_tabs")
-                    page = capture.choose_moderate_page(context, prompt=one_tab_only, check_cancel=self.check_cancel)
-                    collector = WebCapture(page, out, self, mode=mode)
-                    collector.run()
-                    self.check_cancel()
+                    while not self.quit_event.is_set():
+                        collector = None
+                        final_phase, error_message = "complete", ""
+                        try:
+                            self.check_cancel()
+                            if context and channel != previous_channel:
+                                context.close()
+                                context = None
+                            fresh = context is None
+                            if fresh:
+                                try:
+                                    context = playwright.chromium.launch_persistent_context(
+                                        str(self.profile), channel=channel, headless=False, accept_downloads=False)
+                                except Exception:
+                                    raise capture.CaptureError("browser_launch_failed") from None
+                                context.set_default_timeout(10000)
+                            page = context.pages[0] if context.pages else context.new_page()
+                            if fresh or url != previous_url:
+                                page.goto(url, wait_until="domcontentloaded", timeout=60000)
+                            previous_url, previous_channel = url, channel
+                            self.await_action("navigate")
+                            def one_tab_only(_):
+                                raise capture.CaptureError("multiple_moderate_tabs")
+                            page = capture.choose_moderate_page(context, prompt=one_tab_only, check_cancel=self.check_cancel)
+                            collector = WebCapture(page, out, self, mode=mode)
+                            collector.run()
+                            self.check_cancel()
+                        except Exception as error:
+                            category = str(error) if isinstance(error, capture.CaptureError) else (
+                                "PermissionError" if isinstance(error, PermissionError) else capture.safe_error_category(error))
+                            if category == "stopped_by_user" or self.stop_event.is_set():
+                                final_phase = "stopped"
+                            else:
+                                final_phase = "error"
+                                error_message = ERRORS.get(category, "Collection stopped. Check the dedicated browser and your output folder. Any completed files are preserved.")
+                        self.update(phase="finishing")
+                        if collector:
+                            try:
+                                collector.bundle()
+                                self.update(archive_ready=True)
+                            except Exception:
+                                final_phase, error_message = "error", ERRORS["archive_failed"]
+                        retain = (final_phase == "complete" and keep_open and context is not None
+                                  and not self.stop_event.is_set() and not self.quit_event.is_set())
+                        if not retain:
+                            if context:
+                                try:
+                                    context.close()
+                                except Exception:
+                                    pass
+                                context = None
+                            self.update(phase=final_phase, error=error_message, browser_open=False)
+                            return
+                        self.update(phase=final_phase, error=error_message, browser_open=True)
+                        # Keep event processing alive so manual Canvas navigation
+                        # and closing its window work while the app waits.
+                        while not self.quit_event.is_set() and not self.stop_event.is_set():
+                            with self.condition:
+                                if self.next_run is not None:
+                                    url, out, channel, mode, keep_open = self.next_run
+                                    self.next_run = None
+                                    break
+                            try:
+                                if not context.pages:
+                                    raise capture.CaptureError("browser_or_tab_closed")
+                                context.pages[0].wait_for_timeout(200)
+                            except Exception:
+                                with self.condition:
+                                    self.state["browser_open"] = False
+                                    if self.next_run is not None:
+                                        url, out, channel, mode, keep_open = self.next_run
+                                        self.next_run = None
+                                        context = None
+                                        break
+                                return
+                        else:
+                            return
                 finally:
                     if context:
                         try:
                             context.close()
                         except Exception:
                             pass
-        except Exception as error:
-            category = str(error) if isinstance(error, capture.CaptureError) else (
-                "PermissionError" if isinstance(error, PermissionError) else capture.safe_error_category(error))
-            if category == "stopped_by_user" or self.stop_event.is_set():
-                final_phase = "stopped"
-            else:
-                final_phase = "error"
-                error_message = ERRORS.get(category, "Collection stopped. Check the dedicated browser and your output folder. Any completed files are preserved.")
+        except Exception:
+            self.update(phase="error", error=ERRORS["browser_launch_failed"])
         finally:
-            self.update(phase="finishing")
-            if collector:
-                try:
-                    collector.bundle()
-                    self.update(archive_ready=True)
-                except Exception:
-                    final_phase, error_message = "error", ERRORS["archive_failed"]
-            self.update(phase=final_phase, error=error_message)
+            self.update(browser_open=False)
 
     def browse(self):
         if not self.dialog_lock.acquire(blocking=False):
@@ -493,9 +585,7 @@ class Handler(BaseHTTPRequestHandler):
             elif self.path == "/api/open-key":
                 result = app.open_local(key=True)
             elif self.path == "/api/quit":
-                app.stop_event.set()
-                with app.condition:
-                    app.condition.notify_all()
+                app.shutdown()
                 result = {}
                 threading.Thread(target=self.server.shutdown, daemon=True).start()
             else:
@@ -523,9 +613,7 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
-        app.stop_event.set()
-        with app.condition:
-            app.condition.notify_all()
+        app.shutdown()
         if app.worker:
             app.worker.join(timeout=45)
         server.server_close()
