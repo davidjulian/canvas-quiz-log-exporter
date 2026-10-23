@@ -9,6 +9,8 @@ import hmac
 import json
 import os
 import secrets
+import subprocess
+import sys
 import threading
 import webbrowser
 from datetime import datetime
@@ -60,8 +62,23 @@ def validate_url(value):
 
 
 def profile_folder():
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / "CanvasQuizExporter" / "BrowserProfile"
     base = os.environ.get("LOCALAPPDATA")
     return (Path(base) if base else Path.home() / ".local" / "share") / "CanvasQuizExporter" / "BrowserProfile"
+
+
+def open_path(path):
+    if sys.platform == "darwin":
+        try:
+            subprocess.run(["/usr/bin/open", str(path.resolve())], check=True,
+                           capture_output=True, timeout=15)
+        except (OSError, subprocess.SubprocessError):
+            raise UIError("The file could not open. Open the displayed output path in Finder.") from None
+    elif os.name == "nt":
+        os.startfile(str(path))
+    else:
+        raise UIError("Open the displayed output path in your file manager.")
 
 
 def output_folder(value, profile):
@@ -90,6 +107,7 @@ class LocalApp:
         self.state = {"phase": "idle", "saved": 0, "total": 0, "names": [], "output": "",
                       "first_file": "", "archive_ready": False, "warning_count": 0,
                       "key_ready": False, "export_mode": "coded",
+                      "default_browser": "chrome" if sys.platform == "darwin" else "msedge",
                       "error": "", "run_id": "", "version": capture.VERSION}
 
     def snapshot(self):
@@ -123,7 +141,7 @@ class LocalApp:
                 if self.worker and self.worker.is_alive():
                     raise UIError("A run is already active. Finish it or stop it before opening another.")
                 url = validate_url(payload.get("url"))
-                channel = payload.get("browser", "msedge")
+                channel = payload.get("browser", self.state["default_browser"])
                 if channel not in ("msedge", "chrome"):
                     raise UIError("Choose Microsoft Edge or Google Chrome.")
                 mode = payload.get("export_mode", "coded")
@@ -221,6 +239,16 @@ class LocalApp:
         if not self.dialog_lock.acquire(blocking=False):
             raise UIError("A folder chooser is already open. Check your desktop.")
         try:
+            if sys.platform == "darwin":
+                # AppKit/Tk dialogs cannot run on an HTTP worker thread on macOS.
+                # A separate native process owns the dialog; no student text is
+                # interpolated into AppleScript or passed to a shell.
+                result = subprocess.run(["/usr/bin/osascript", "-e", '''try
+return POSIX path of (choose folder with prompt "Choose approved storage for quiz log exports")
+on error number -128
+return ""
+end try'''], capture_output=True, text=True, check=True, timeout=300)
+                return {"folder": result.stdout.rstrip("\r\n")}
             import tkinter
             from tkinter import filedialog
             root = tkinter.Tk()
@@ -248,9 +276,7 @@ class LocalApp:
             path = out / "private" / "name_key.csv"
         if not path.exists():
             raise UIError("That local file is no longer available.")
-        if os.name != "nt":
-            raise UIError("Open the displayed output path in your file manager.")
-        os.startfile(str(path))
+        open_path(path)
         return {}
 
 

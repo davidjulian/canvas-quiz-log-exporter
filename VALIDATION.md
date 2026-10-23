@@ -1,8 +1,16 @@
 # Validation
 
-Version 0.9.0, October 23, 2026. Windows, Python 3.11.5, Playwright 1.64.1 and installed Microsoft Edge.
+Version 0.10.0, October 23, 2026.
 
-All 61 tests passed with none skipped in 85 seconds. The suite includes original collector coverage, HTTP/privacy checks, coded and named download tests, and end-to-end browser workflows using invented records and temporary files/profiles. No live Canvas account, existing browser profile, real student record or name key is used by the tests.
+Windows verification for 0.10.0: all 67 tests passed with none skipped in 86 seconds using Python 3.11 and Microsoft Edge. These include the full coded and named workflows and the new platform tests.
+
+Platform update: added macOS setup and launcher scripts, a native macOS folder chooser, Finder/file opening, Application Support browser profile storage, and a Chrome default on Mac. Windows keeps its previous profile location and Edge default. Platform tests use invented paths and mock native dialogs/file opening, including cancellation, spaces and apostrophes, subprocess failures and safe error messages. Shell script syntax is checked with bash; Mac ZIP scripts have LF line endings and executable Unix permissions.
+
+GitHub Actions runs the full invented-data workflow on macos-14 (Apple silicon) and macos-15-intel, including setup with the distributed Install.command. See the workflow results for the exact tested commit. Finder double-click launch, native folder dialog interaction, file associations, Gatekeeper and institution-managed permissions are not exercised end to end. No physical Mac or live Canvas account is available in this Windows session.
+
+Prior Windows baseline: Windows, Python 3.11.5, Playwright 1.64.1 and installed Microsoft Edge.
+
+For version 0.9.0, all 61 tests passed with none skipped in 85 seconds. The suite includes original collector coverage, HTTP/privacy checks, coded and named download tests, and end-to-end browser workflows using invented records and temporary files/profiles. No live Canvas account, existing browser profile, real student record or name key is used by the tests.
 
 Coded-mode tests verify original event text and elapsed times, start/finish date and clock omission, limited identifier substitutions, random IDs, the separate private key, archive allowlisting, matching capture hashes and preservation of partial downloads.
 

@@ -17,3 +17,29 @@ jobs:
           python-version: ${{ matrix.python }}
       - run: python -m pip install -r requirements.txt
       - run: python -m unittest discover -s tests -q
+  mac:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    env:
+      CANVAS_RUN_BROWSER_TESTS: '1'
+      CANVAS_TEST_BROWSER: chrome
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Check Mac shell syntax and install using the distributed script
+        run: |
+          bash -n Install.command
+          bash -n "Start App.command"
+          printf '\n' | bash Install.command
+      - name: Ensure the synthetic test browser is installed
+        run: .venv/bin/python3 -m playwright install chrome
+      - name: Run invented-data browser workflows and privacy checks
+        run: .venv/bin/python3 -m unittest discover -s tests -q
+      - name: Check executable launcher permissions in Git
+        run: test -x Install.command && test -x "Start App.command"

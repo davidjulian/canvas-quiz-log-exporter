@@ -26,7 +26,7 @@ class QuickTests(unittest.TestCase):
     def setUpClass(cls):
         from playwright.sync_api import sync_playwright
         cls.playwright = sync_playwright().start()
-        cls.browser = cls.playwright.chromium.launch(headless=True, channel="msedge")
+        cls.browser = cls.playwright.chromium.launch(headless=True, channel=os.environ.get("CANVAS_TEST_BROWSER", "msedge" if sys.platform == "win32" else "chrome"))
 
     @classmethod
     def tearDownClass(cls):

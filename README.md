@@ -1,18 +1,40 @@
 # Canvas Quiz Log Exporter
 
-A local Windows app for downloading the displayed event text from Canvas **New Quizzes**. It opens each **View Log** on one Moderate page, saves the text, and returns to the student list. It performs **no analysis**.
+A local Windows and macOS app for downloading the displayed event text from Canvas **New Quizzes**. It opens each **View Log** on one Moderate page, saves the text, and returns to the student list. It performs **no analysis**.
 
-[Download & setup website](https://davidjulian.github.io/canvas-quiz-log-exporter/) · [Download the latest release](https://github.com/davidjulian/canvas-quiz-log-exporter/releases/latest)
+[Downloads and setup website](https://davidjulian.github.io/canvas-quiz-log-exporter/) · [Release files](https://github.com/davidjulian/canvas-quiz-log-exporter/releases/latest)
 
-Version 0.9.0. Requires **Windows, Python 3.10 or newer, and installed Microsoft Edge or Google Chrome**. This is a local Python app, not a standalone executable or a hosted Canvas service. It uses your own authorized instructor browser session; no Canvas API token is requested.
+Version 0.10.0. Requires **Windows 11+ or macOS 14+ (Intel or Apple silicon), Python 3.10 or newer, and installed Microsoft Edge or Google Chrome**. The local interface can open in your usual browser, but the dedicated Canvas window must use Edge or Chrome; Safari is not supported for collection. This is a local Python app, not a standalone executable or a hosted Canvas service. It uses your own authorized instructor browser session; no Canvas API token is requested.
 
 ## Install and open
 
-1. Download **canvas-quick-capture.zip** from the release and extract it completely.
-2. Open the extracted canvas-quick-capture folder and double-click **Install.cmd** once. Setup installs the dependency from requirements.txt into a local Python environment. Internet access is needed for setup.
-3. Double-click **Start App.cmd**. The app opens a local page in your default browser. Windows may hide the .cmd extensions. No terminal commands are needed for normal use.
+Install an institution-approved Python 3.10 or newer, or use [Python downloads](https://www.python.org/downloads/). Install Chrome or Edge if needed. Internet access is needed for setup. The software ZIPs contain only source files, documentation, tests and launchers. They contain no student records, local environments or browser profiles.
 
-If you already have a working installation, close the old app with **Quit local app**, copy in the updated source files, then use **Start App.cmd** again. No new dependency is needed for version 0.9.0. Do not run the launchers from inside the ZIP.
+### Windows
+
+1. Download **canvas-quick-capture.zip** from the release and extract it completely.
+2. Open the extracted canvas-quick-capture folder and double-click **Install.cmd** once. Setup installs requirements.txt into a local Python environment.
+3. Double-click **Start App.cmd**. The app opens in your default browser. Windows may hide the .cmd extensions. Edge is initially selected for the separate Canvas window.
+
+### macOS
+
+1. Download **canvas-quiz-log-exporter-macos.zip** and extract it completely. This source package works on Intel and Apple silicon Macs running macOS 14 or later; it is not a signed or notarized .app bundle.
+2. Open the extracted canvas-quick-capture folder and double-click **Install.command** once. A Terminal window opens and installs requirements.txt into a local Python environment. No administrator access is requested. If Python cannot be found, install an approved Python 3.10+ or the [python.org macOS installer](https://www.python.org/downloads/macos/), then retry.
+3. Double-click **Start App.command**. The app opens in your default browser. Chrome is initially selected for the separate Canvas window; change to Edge if that is what you have installed. Leave the launcher Terminal window open while the app runs. Use **Quit local app** when finished.
+
+The app uses a native Mac folder chooser and opens output folders, logs and keys with the usual Finder/file associations. If Browse cannot open or storage permission is denied, paste an existing approved folder path or choose another permitted location.
+
+If .command files lack executable permission, open Terminal in the extracted app folder and run:
+
+```sh
+chmod u+x Install.command "Start App.command"
+```
+
+If Finder opens a launcher as text, run `bash Install.command` once, then `bash "Start App.command"` from that folder. If institutional security blocks this software, consult your IT support; the installer does not disable security controls. If pip reports a certificate error with python.org Python, run **Install Certificates.command** in its Python folder under Applications, then retry setup. See [Python's Mac instructions](https://docs.python.org/3/using/mac.html).
+
+### Updating an existing installation
+
+Quit the old app, then extract the new software package into a new folder and run its installer once. Keep your existing exports where they are; the new version does not rewrite them. Windows and Mac virtual environments cannot be copied between operating systems. Do not run launchers from inside a ZIP. The default browser profile stays outside the software folder, so updating the software does not move it.
 
 ## Choose an export mode
 
@@ -55,7 +77,7 @@ References: [UF data classification policy](https://policy.ufl.edu/policy/data-c
 
 The local interface binds only to 127.0.0.1 on a random port and requires a random per-launch token for API access. It checks Host and Origin, blocks framing and external web assets, and sends no-store cache headers. There are no AI, analytics or telemetry calls. Canvas still uses its normal institutional SSO and LTI connections. Do not publicly host this local server or forward its port. Output files are not automatically encrypted.
 
-The dedicated browser profile stays in `%LOCALAPPDATA%\CanvasQuizExporter\BrowserProfile`. It contains session state and is never included in exports or the software distribution. No API token is requested or extracted. Keep the profile private.
+The dedicated browser profile stays in `%LOCALAPPDATA%\CanvasQuizExporter\BrowserProfile` on Windows and `~/Library/Application Support/CanvasQuizExporter/BrowserProfile` on macOS. It contains session state and is never included in exports or the software distribution. No API token is requested or extracted. Keep the profile private.
 
 ## Scope
 
@@ -67,7 +89,7 @@ Original event wording and relative elapsed times are retained. There is no even
 
 - If **Browse** cannot open, paste an existing folder path.
 - If the dedicated browser cannot open, close earlier exporter/Inspector browser windows using the same profile and confirm Edge or Chrome is installed.
-- If Start App opens no page, run `.\.venv\Scripts\python.exe local_app.py --no-open` from this folder and open the printed local session link. Do not share the link.
+- If the launcher opens no page, run `.\.venv\Scripts\python.exe local_app.py --no-open` (Windows) or `.venv/bin/python3 local_app.py --no-open` (Mac) from the extracted folder and open the printed local session link. Do not share the link.
 - Earlier downloads are not automatically rewritten by an update. The earlier quick_capture.py command line workflow is retained for compatibility and uses its original named-file behavior.
 - Share the clean software release ZIP with colleagues. Do not share your working folder, records, key, profile or environment.
 
@@ -75,4 +97,4 @@ Never post student records, identifying screenshots, name keys or session links 
 
 ## Tests
 
-With Playwright installed and Edge available, set `CANVAS_RUN_BROWSER_TESTS=1` and run `.\.venv\Scripts\python.exe -m unittest discover -s tests -q`. Browser tests use invented local pages, temporary profiles and temporary output files. Non-fixture browser requests are blocked. Without that environment variable, only the non-browser tests run. See [VALIDATION.md](VALIDATION.md).
+With Playwright installed and Edge (Windows) or Chrome (Mac) available, set `CANVAS_RUN_BROWSER_TESTS=1` and run `.\.venv\Scripts\python.exe -m unittest discover -s tests -q` (Windows) or `.venv/bin/python3 -m unittest discover -s tests -q` (Mac). `CANVAS_TEST_BROWSER=chrome` or `msedge` can override the browser used by synthetic tests. Browser tests use invented local pages, temporary profiles and temporary output files. Non-fixture browser requests are blocked. Without that environment variable, only the non-browser tests run. See [VALIDATION.md](VALIDATION.md).

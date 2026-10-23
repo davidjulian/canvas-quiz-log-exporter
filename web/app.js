@@ -8,6 +8,7 @@
   let polling = true;
   let busy = false;
   let modeRestored = false;
+  let browserRestored = false;
   $("about-open").addEventListener("click", () => $("about-dialog").showModal());
   $("about-close").addEventListener("click", () => $("about-dialog").close());
   const terminal = new Set(["idle", "complete", "stopped", "error"]);
@@ -34,7 +35,7 @@
     }
     const response = await fetch(path, options);
     if (!response.ok) {
-      if (response.status === 403) throw new Error("This session is not authorized. Reopen the app using Start App.cmd.");
+      if (response.status === 403) throw new Error("This session is not authorized. Reopen the app using its Start App launcher.");
       let result;
       try { result = await response.json(); } catch (_) {}
       throw new Error(result?.error || "The local app could not complete that action.");
@@ -48,6 +49,10 @@
   function show(id, visible) { $(id).hidden = !visible; }
   function render(next) {
     state = next;
+    if (!browserRestored) {
+      $("browser").value = state.default_browser || "msedge";
+      browserRestored = true;
+    }
     const phase = state.phase;
     const active = !terminal.has(phase);
     if (!modeRestored || active) {
@@ -178,17 +183,17 @@
       $("stage-title").textContent = "Local app closed";
       $("stage-description").textContent = "Any active collection is stopping and preserving completed files. You can close this tab.";
       $("status").textContent = "Closed";
-      $("activity").textContent = "Use Start App.cmd to reopen.";
+      $("activity").textContent = "Use the Start App launcher to reopen.";
     } catch (error) { localError(error.message); }
   });
   async function poll() {
     if (!polling) return;
     try { await refresh(); }
-    catch (_) { localError("The local app is unavailable. Reopen it with Start App.cmd if it has closed."); }
+    catch (_) { localError("The local app is unavailable. Reopen it with the Start App launcher if it has closed."); }
     if (polling) setTimeout(poll, 750);
   }
   if (!token) {
-    localError("Open this interface using Start App.cmd. The session link is required to access local records.");
+    localError("Open this interface using the Start App launcher. The session link is required to access local records.");
     document.querySelectorAll("button,input,select").forEach(element => element.disabled = true);
   } else { poll(); }
 })();

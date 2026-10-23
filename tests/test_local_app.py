@@ -175,7 +175,7 @@ class BrowserUITests(HTTPTests):
         super().setUp()
         from playwright.sync_api import sync_playwright
         self.playwright = sync_playwright().start()
-        self.browser = self.playwright.chromium.launch(headless=True, channel="msedge")
+        self.browser = self.playwright.chromium.launch(headless=True, channel=os.environ.get("CANVAS_TEST_BROWSER", "msedge" if sys.platform == "win32" else "chrome"))
         self.context = self.browser.new_context()
         self.context.route("**/*", lambda route: route.continue_()
                            if route.request.url.startswith(self.server.origin + "/") else route.abort())
@@ -209,7 +209,7 @@ class BrowserUITests(HTTPTests):
         from playwright.sync_api import BrowserType
         original = BrowserType.launch_persistent_context
         def launch(browser_type, user_data_dir, **kwargs):
-            context = original(browser_type, user_data_dir, channel="msedge", headless=True, accept_downloads=False)
+            context = original(browser_type, user_data_dir, channel=os.environ.get("CANVAS_TEST_BROWSER", "msedge" if sys.platform == "win32" else "chrome"), headless=True, accept_downloads=False)
             context.route("**/*", lambda route: route.fulfill(status=200, content_type="text/html", body=FIXTURE)
                           if route.request.url.split('#')[0] == "https://canvas-fixture.invalid/" else route.abort())
             return context
@@ -242,13 +242,13 @@ class BrowserUITests(HTTPTests):
         self.assert_phase("checking")
         self.assertEqual(self.app.snapshot()["saved"], 1)
         self.assertTrue(self.page.locator("#open-key-check").is_visible())
-        with patch.object(web.os, "startfile") as open_file:
+        with patch.object(web, "open_path") as open_file:
             self.page.locator("#open-key-check").click()
             deadline = time.monotonic() + 5
             while not open_file.called and time.monotonic() < deadline:
                 self.page.wait_for_timeout(50)
             expected_key = Path(self.app.snapshot()["output"]) / "private" / "name_key.csv"
-            open_file.assert_called_once_with(str(expected_key))
+            open_file.assert_called_once_with(expected_key)
         self.assertTrue(self.page.locator("#checked").is_disabled())
         self.page.locator("#first-reviewed").check()
         self.page.locator("#checked").click()
