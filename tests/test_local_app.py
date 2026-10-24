@@ -379,7 +379,8 @@ class BrowserUITests(HTTPTests):
         while not command.called and time.monotonic() < deadline:
             self.page.wait_for_timeout(50)
         self.assertTrue(command.called)
-        self.page.wait_for_function("!document.getElementById('launch').disabled")
+        from playwright.sync_api import expect
+        expect(self.page.locator("#launch")).to_be_enabled()
 
     def test_blank_label_warning_and_literal_label_text_fit_small_screens(self):
         self.app.update(phase="complete", run_id="previous", folder_label="", output_base=str(self.output))
