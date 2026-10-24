@@ -548,6 +548,32 @@ class BrowserUITests(HTTPTests):
             self.assertTrue((out / "coded-logs.zip").is_file())
             self.assertTrue((out / self.app.snapshot()["first_file"]).is_file())
 
+    def test_last_timed_event_estimate_survives_an_earlier_bad_timestamp(self):
+        fixture = FIXTURE.replace("00:10 Stopped viewing", "00:99 Stopped viewing").replace(
+            "00:40 Quiz submitted.", "00:40 Answered question.").replace(
+            "00:50 Synthetic private final event", "00:50 Answered question")
+        self.launch_synthetic(fixture=fixture)
+        self.page.locator("#names-reviewed").check()
+        self.page.locator("#start").click()
+        self.page.locator("#open-first").wait_for(state="visible", timeout=30000)
+        self.assert_phase("checking")
+        state = self.app.snapshot()
+        self.assertEqual(state["summary_rows"][0]["total_elapsed_seconds"], 50)
+        self.assertEqual(state["summary_rows"][0]["elapsed_basis"], "last visible event")
+        self.assertEqual(state["summary_rows"][0]["stopped_viewing_events"], 1)
+        self.assertIsNone(state["summary_rows"][0]["average_away_seconds"])
+        elapsed = self.page.locator("#summary-rows tr").first.locator("td").nth(1)
+        self.assertIn("00:00:50", elapsed.inner_text())
+        self.assertIn("Estimated from last timed event", elapsed.inner_text())
+        with (Path(state["output"]) / "private" / "event_summary.csv").open(encoding="utf-8-sig", newline="") as handle:
+            summary = list(capture.csv.DictReader(handle))[0]
+        self.assertEqual(summary["Total elapsed time (HH:MM:SS)"], "00:00:50")
+        self.assertEqual(summary["Elapsed time basis"], "last visible event")
+        self.assertEqual(summary["Average away time (seconds)"], "")
+        self.page.locator("#stop").click()
+        self.assert_phase("stopped")
+        self.assertTrue((Path(state["output"]) / "coded-logs.zip").is_file())
+
     def test_mobile_layout_and_names_rendered_as_text(self):
         self.assertNotIn("UF approved OneDrive is fine.", self.page.locator("body").inner_text())
         self.page.set_viewport_size({"width": 390, "height": 844})

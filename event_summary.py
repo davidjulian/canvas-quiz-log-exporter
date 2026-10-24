@@ -20,7 +20,12 @@ Stopped viewing events: recorded stop entries before a recognized submission
 event; later events are excluded. If submission is absent, all visible events
 are used and elapsed time is the last visible elapsed value, not a verified
 total attempt duration. Clock formats: MM:SS or HH:MM:SS. Calendar dates and
-clock times in the page header are not used for these calculations.
+clock times in the page header are not used for these calculations. An unreadable
+earlier timestamp does not discard a readable submission time or final timed
+event. Away durations remain unavailable when any event timestamp is invalid.
+An unreadable final timed event leaves the fallback unavailable; an earlier
+readable event is not silently substituted for it. Mixed event order or
+conflicting submission times still leave elapsed time unavailable.
 
 Average away seconds: arithmetic mean of unambiguous Stopped viewing -> Resumed
 pairs. Other event types do not end an away period. Zero-second pairs are kept.
@@ -77,6 +82,7 @@ def summarize_text(text):
     body = "\n".join(lines[starts[0] + 1:])
     events, block, at = [], [], None
     invalid_clock = False
+    clock_validity = []
     for line in body.splitlines():
         line = line.strip()
         if not line:
@@ -89,10 +95,14 @@ def summarize_text(text):
                 at = clock_seconds(match[1])
             except ValueError:
                 invalid_clock, at = True, None
+            clock_validity.append(at is not None)
             block = [match[2]] if match[2] else []
+        elif re.match(r"^\d{1,6}:\S+", line):
+            invalid_clock = True
+            clock_validity.append(False)
+            if at is not None:
+                block.append(line)
         elif at is not None:
-            if re.match(r"^\d{1,6}:\S+", line):
-                invalid_clock = True
             block.append(line)
     if at is not None:
         events.append((at, " ".join(block)))
@@ -109,9 +119,10 @@ def summarize_text(text):
     if all(a >= b for a, b in zip(times, times[1:])) and times[0] > times[-1]:
         events.reverse()
         times.reverse()
+        clock_validity.reverse()
         notes.append("Reverse chronological rows were reversed for pairing.")
-    if invalid_clock or any(a > b for a, b in zip(times, times[1:])):
-        notes.append("Invalid or out-of-order elapsed timestamps; durations not calculated.")
+    if any(a > b for a, b in zip(times, times[1:])):
+        notes.append("Out-of-order elapsed timestamps; elapsed time and away durations not calculated.")
         return result
     submits = [(i, t) for i, (t, d) in enumerate(events) if SUBMIT.match(d)]
     if len({t for _, t in submits}) > 1:
@@ -125,12 +136,21 @@ def summarize_text(text):
         result["total_elapsed_seconds"] = elapsed
         result["elapsed_basis"] = "submission event"
         result["stopped_viewing_events"] = sum(bool(STOP.match(d)) for _, d in events)
-    else:
+    elif clock_validity[-1]:
         result["total_elapsed_seconds"] = times[-1]
         result["elapsed_basis"] = "last visible event"
         notes.append("No recognized submission event: elapsed time is the last visible value, not a verified total.")
+    else:
+        notes.append("The final timed event is unreadable; elapsed time is unavailable. An earlier event was not substituted.")
     if times[0] != 0:
         notes.append("Visible elapsed events do not begin at zero; earlier events may be missing.")
+    if invalid_clock:
+        if submits and result["stopped_viewing_events"] != raw_stops:
+            notes.append("Stop count includes all visible stop entries because some timestamps are unreadable; the submission boundary could not be verified for every entry.")
+        result["stopped_viewing_events"] = raw_stops
+        result["unpaired_stop_events"] = raw_stops
+        notes.append("Invalid elapsed timestamps: away durations were not calculated. A readable submission or final timed event is retained for elapsed time when available.")
+        return result
     if raw_stops != recognized_stops:
         result["stopped_viewing_events"] = raw_stops
         result["unpaired_stop_events"] = raw_stops

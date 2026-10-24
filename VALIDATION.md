@@ -1,5 +1,15 @@
 # Validation
 
+Version 0.13.1, October 24, 2026.
+
+Elapsed-time fallback repair: a readable submission event or last timed event is retained even if an earlier event timestamp is invalid. Away durations remain unavailable when timestamps cannot be trusted. The table labels last-event elapsed time as an estimate; the CSV retains the timing basis and reliability notes. An unreadable final event is not silently replaced with an earlier one. Mixed event order and conflicting submission times remain unavailable. A raw stop entry with an invalid clock is not mistaken for zero recorded stops.
+
+Invented regression cases cover invalid earlier and final clocks, a readable submission after an invalid row, reversed rows with an unreadable latest event, a long lab-like timeline without submission, and stop-count preservation. The local interface workflow checks the estimated time label, named CSV values, blank unavailable away durations and preservation of original downloads and partial ZIPs. A user-supplied redacted lab log was checked locally using only generic layout flags and availability booleans; its event values and text were not copied into the software or test fixtures.
+
+Platform results will be recorded when the release checks finish.
+
+## Version 0.13.0 validation
+
 Version 0.13.0, October 24, 2026.
 
 Student pagination: the web app discovers all recognized numbered Moderate pages before one combined name review, then captures the reviewed controls in page order. The first-log check remains once per run. The current filters and page size remain in effect. Both export modes use global positions, and coded IDs remain unique across pages. The private name key includes source page and row position; the private manifest includes per-page completion. Event pagination and hidden attempts remain unsupported.

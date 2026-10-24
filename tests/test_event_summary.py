@@ -103,15 +103,55 @@ class EventSummaryTests(unittest.TestCase):
         self.assertEqual(row["stopped_viewing_events"], 0)
         self.assertIsNone(row["average_away_seconds"])
 
-    def test_invalid_or_mixed_order_times_do_not_generate_durations(self):
-        for events in (("00:00 Session started", f"00:20 {STOP}", "00:10 Resumed"),
-                       ("00:00 Session started", f"00:99 {STOP}", "01:00 Resumed"),
-                       ("00:00 Session started", "00:xx Resumed", f"00:10 {STOP}")):
+    def test_mixed_order_times_do_not_generate_elapsed_or_away_durations(self):
+        row = summarize_text(log("00:00 Session started", f"00:20 {STOP}", "00:10 Resumed"))
+        self.assertIsNone(row["total_elapsed_seconds"])
+        self.assertIsNone(row["average_away_seconds"])
+        self.assertTrue(any("timestamps" in note for note in row["notes"]))
+
+    def test_earlier_invalid_timestamp_keeps_final_event_elapsed_estimate(self):
+        for events, final in ((("00:00 Session started", f"00:99 {STOP}", "01:00 Resumed"), 60),
+                              (("00:00 Session started", "00:xx Resumed", f"00:10 {STOP}"), 10)):
             with self.subTest(events=events):
                 row = summarize_text(log(*events))
-                self.assertIsNone(row["total_elapsed_seconds"])
+                self.assertEqual(row["total_elapsed_seconds"], final)
+                self.assertEqual(row["elapsed_basis"], "last visible event")
                 self.assertIsNone(row["average_away_seconds"])
-                self.assertTrue(any("timestamps" in note for note in row["notes"]))
+                self.assertIsNone(row["total_away_seconds"])
+                self.assertIsNone(row["percent_elapsed_away"])
+                self.assertTrue(any("Invalid elapsed timestamps" in note for note in row["notes"]))
+                self.assertTrue(any("not a verified total" in note for note in row["notes"]))
+
+    def test_earlier_invalid_timestamp_keeps_a_readable_submission_time(self):
+        row = summarize_text(log("00:00 Session started", "00:xx Answered question", "02:00 Quiz submitted", "03:00 Viewed results"))
+        self.assertEqual(row["total_elapsed_seconds"], 120)
+        self.assertEqual(row["elapsed_basis"], "submission event")
+        self.assertIsNone(row["average_away_seconds"])
+        self.assertTrue(any("after submission" in note for note in row["notes"]))
+
+    def test_unreadable_final_clock_does_not_silently_use_an_earlier_value(self):
+        for last in ("00:99 Answered question", "00:xx Answered question"):
+            row = summarize_text(log("00:00 Session started", "00:20 Viewed question", last))
+            self.assertIsNone(row["total_elapsed_seconds"])
+            self.assertEqual(row["elapsed_basis"], "unavailable")
+            self.assertTrue(any("final timed event is unreadable" in note for note in row["notes"]))
+
+    def test_unreadable_stop_timestamp_is_not_reported_as_zero_stops(self):
+        row = summarize_text(log("00:00 Session started", f"00:99 {STOP}", "02:00 Quiz submitted"))
+        self.assertEqual(row["total_elapsed_seconds"], 120)
+        self.assertEqual(row["stopped_viewing_events"], 1)
+        self.assertIsNone(row["average_away_seconds"])
+        self.assertTrue(any("all visible stop entries" in note for note in row["notes"]))
+
+    def test_reverse_rows_with_unreadable_latest_event_have_no_fallback(self):
+        row = summarize_text(log("00:99 Answered question", "00:30 Viewed question", "00:00 Session started"))
+        self.assertIsNone(row["total_elapsed_seconds"])
+
+    def test_long_lab_without_submission_uses_last_timed_answer(self):
+        row = summarize_text(log("00:00 Session started", "00:99 Viewed question", "03:00 Answered question", "27:15:00 Answered question"))
+        self.assertEqual(row["total_elapsed_seconds"], 98100)
+        self.assertEqual(row["elapsed_basis"], "last visible event")
+        self.assertIsNone(row["average_away_seconds"])
 
     def test_descending_rows_are_reversed(self):
         row = summarize_text(log("01:00 Quiz submitted", "00:30 Resumed", f"00:10 {STOP}", "00:00 Session started"))

@@ -77,9 +77,15 @@
         details.append(summary, note); name.append(details);
       }
       tr.append(name);
-      for (const value of [elapsed(row.total_elapsed_seconds), row.stopped_viewing_events ?? "—"]) {
-        const td = document.createElement("td"); td.textContent = String(value); tr.append(td);
+      const elapsedCell = document.createElement("td");
+      const elapsedValue = document.createElement("div"); elapsedValue.textContent = elapsed(row.total_elapsed_seconds);
+      elapsedCell.append(elapsedValue);
+      if (row.elapsed_basis === "last visible event" && row.total_elapsed_seconds != null) {
+        const estimate = document.createElement("small"); estimate.className = "hint";
+        estimate.textContent = "Estimated from last timed event"; elapsedCell.append(estimate);
       }
+      const stopCell = document.createElement("td"); stopCell.textContent = String(row.stopped_viewing_events ?? "—");
+      tr.append(elapsedCell, stopCell);
       const mean = document.createElement("td"), value = document.createElement("div"), pairs = document.createElement("small");
       value.textContent = row.average_away_seconds === null ? "—" : row.average_away_seconds.toFixed(2);
       pairs.className = "hint"; pairs.textContent = row.stopped_viewing_events === null ? "Pairing unavailable" : `${row.paired_intervals} paired; ${row.unpaired_stop_events} unpaired stops`;
