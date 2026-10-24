@@ -10,11 +10,13 @@ Invented tests cover navigation wrappers, nested paginators, unrelated-frame err
 
 The instructor confirmed that the repaired local app reached student name review on the UF Moderate page. Only the app phase and counts-only diagnostics were inspected here; no actual roster, student name, log text or screenshot was loaded into the conversation.
 
-Performance repair: row stability uses a batched local change token, followed by one authoritative full identity scan. A row change during that scan is rejected, and the selected control is checked again before clicking. The verified return state is reused instead of rescanning the roster twice more. Targeted invented tests cover the full-scan budget, mutation during the scan, a changed target before clicking, both export modes across pages and partial-run preservation.
+Performance repair: row stability uses a batched local change token, followed by one authoritative full identity scan. A row change during that scan is rejected, and the selected control is checked again before clicking. The verified return state is reused instead of rescanning the roster twice more. Targeted invented tests cover the full-scan budget, mutation during the scan, hidden/disabled row updates, a changed target before clicking, both export modes across pages and partial-run preservation.
 
 In one local invented 45-student comparison, the prior back/verify, redundant verification and next-click checks totaled 8.18 seconds. The optimized equivalent took 2.43 seconds. This excludes Canvas network loading and the separate 3-second log text stability interval. These illustrative timings do not predict live institutional performance. No running user collection was restarted or altered for this optimization.
 
-Final platform results will be recorded when the release checks finish.
+Windows: all 139 tests passed with none skipped in 272 seconds. Tests use invented pages and temporary browser contexts, without accessing the instructor's running Canvas collection.
+
+Mac: all 139 tests passed with none skipped on both Apple silicon and Intel. Linux unit checks also passed. [Successful workflow and tested source commit](https://github.com/davidjulian/canvas-quiz-log-exporter/actions/runs/40142612476). The Mac checks include the distributed installer, launcher permissions and invented browser workflows. Native dialog and institution-managed installation limitations from the earlier platform validation still apply.
 
 ## Version 0.13.1 validation
 
