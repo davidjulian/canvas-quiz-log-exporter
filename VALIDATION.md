@@ -6,7 +6,7 @@ Student pagination: the web app discovers all recognized numbered Moderate pages
 
 Invented-data tests cover 150 controls across three pages, starting on a later page, empty middle pages, number-only and mirrored pagers, public InstUI current-page markers with sliding windows and omitted disabled arrows, iframe navigation, Back resetting to page 1, conflicting controls, stale/repeated rows, changed filters and reviewed lists, limits, cancellation and later-page partial ZIP preservation. Full coded and named capture cases verify one name review, one first-log check, unique IDs/global positions, the combined private CSV and sharing ZIP exclusions. No live Canvas account, existing browser profile or student record is used. Actual institutional page layouts still require local verification; passing invented fixtures cannot certify whole-class or whole-event completeness.
 
-Windows and Mac results for this version are recorded after the release checks finish.
+Windows: all 110 tests passed with none skipped in 276 seconds. All 110 tests also passed with none skipped on both Apple silicon and Intel Mac environments. Linux unit checks passed. [Successful workflow and tested source commit](https://github.com/davidjulian/canvas-quiz-log-exporter/actions/runs/40103579635). The combined name review was visually checked in the local browser with invented names from three pages. No live Canvas account or actual student list was inspected.
 
 ## Version 0.12.0 validation
 
@@ -52,4 +52,4 @@ UI tests cover the revised Build → Moderate instructions, the private-key butt
 
 HTTP tests cover loopback binding, authentication, hostile Origin/Host rejection, POST Origin checks, malformed requests, no-store/framing protections and refusal to serve arbitrary filesystem paths. Small rejected POST bodies are discarded with a bounded timeout so Windows clients can receive the 403 response before connection close.
 
-The real Windows folder chooser, native file associations and double-click launchers are not exercised end to end. A folder path can also be pasted. Live institutional layouts still need the first-download check. Student and event pagination, hidden/virtual rows and collapsed details remain unsupported. Coded free text needs local privacy review; no test certifies FERPA compliance or a data classification change.
+The real Windows folder chooser, native file associations and double-click launchers are not exercised end to end. A folder path can also be pasted. Live institutional layouts still need the first-download check. At that earlier baseline, student and event pagination, hidden/virtual rows and collapsed details remained unsupported; version 0.13.0 adds recognized student pagination to the web app. Coded free text needs local privacy review; no test certifies FERPA compliance or a data classification change.

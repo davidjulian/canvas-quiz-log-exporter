@@ -10,12 +10,12 @@
 <body>
 <main>
   <h1>Canvas Quiz Log Exporter</h1>
-  <p>A free local tool for instructors to download the displayed event text from Canvas New Quizzes logs. It collects logs from one Moderate page at a time and produces a local descriptive focus-event summary.</p>
+  <p>A free local tool for instructors to download the displayed event text from Canvas New Quizzes logs. It collects logs across recognized numbered Moderate student pages and produces a local descriptive focus-event summary.</p>
   <p>This website provides software downloads and instructions. The app runs locally on your computer; student records are not uploaded to this website or GitHub.</p>
 
   <section aria-labelledby="downloads">
     <h2 id="downloads">Downloads</h2>
-    <p>Version 0.12.0. Python 3.10 or newer and an installed copy of Google Chrome or Microsoft Edge are required. Safari cannot be used as the dedicated Canvas browser.</p>
+    <p>Version 0.13.0. Python 3.10 or newer and an installed copy of Google Chrome or Microsoft Edge are required. Safari cannot be used as the dedicated Canvas browser.</p>
     <ul>
       <li><a href="https://github.com/davidjulian/canvas-quiz-log-exporter/releases/latest/download/canvas-quick-capture.zip">Windows ZIP</a> — Windows 11 or later.</li>
       <li><a href="https://github.com/davidjulian/canvas-quiz-log-exporter/releases/latest/download/canvas-quiz-log-exporter-macos.zip">macOS ZIP</a> — macOS 14 (Sonoma) or later, Intel or Apple silicon.</li>
@@ -48,7 +48,7 @@
     <ol>
       <li>Enter your Canvas address (UF is the default), choose an output folder and select an export mode. An optional <strong>Quiz name or folder label</strong> identifies the run folder; the app adds a date and unique suffix. Leave it blank for the default folder name.</li>
       <li>Select <strong>Open Canvas</strong>. Sign in yourself in the separate browser. Open the completed New Quiz, then go to <strong>Build → Moderate</strong>. Set the desired filters and students per page, and wait for the list to load.</li>
-      <li>Return to the app, select <strong>I’m on Moderate — find logs</strong>, review the names and start collection.</li>
+      <li>Return to the app, select <strong>I’m on Moderate — find logs</strong>, wait while the app scans the numbered student pages, then review the combined names and count and start collection. Do not change Canvas filters, sorting or page size after review.</li>
       <li>Compare the first downloaded log with Canvas, including its final event. In coded mode, also check the ID against the private name key using the button provided.</li>
       <li>Confirm the check to collect the remaining displayed logs. Leave the separate Canvas window alone during collection.</li>
       <li>Use <strong>Open output folder</strong> to find the text files and export ZIP. If you selected <strong>Keep Canvas open for another quiz</strong>, open the next quiz in that window, change the folder label and select <strong>Use open Canvas for a new run</strong>. Otherwise Canvas closes after collection. Select <strong>Quit local app</strong> when finished.</li>
@@ -76,7 +76,7 @@
     <h2 id="privacy">Privacy and limitations</h2>
     <p>Output, original captures and browser sign-in state remain on your computer or the storage you select. The app requests no Canvas API token and sends no records to AI services. Canvas uses its normal institutional sign-in and connections.</p>
     <p>Coding does not guarantee anonymity, change a data classification or certify FERPA compliance. The user is responsible for following institutional privacy, storage, disclosure and retention rules. Keep identifying originals and the private name key protected. Share only locally reviewed files through services approved for their resulting classification.</p>
-    <p>A run collects only the View Log controls currently displayed on one Moderate page. It does not load additional student or event pages, reveal hidden attempts, scroll virtual lists or expand collapsed details. The app targets English New Quizzes layouts with logs opening in the same tab. Verify the downloads locally.</p>
+    <p>A run scans recognized numbered Moderate student pages using the current filters, combines their names for one review, and saves one folder, ZIP and summary. Ambiguous page controls, repeated pages or changed lists stop collection and preserve completed files. Hidden attempts, virtual lists, collapsed details and additional pages inside event logs are not loaded automatically. The app targets English New Quizzes layouts with logs opening in the same tab. Verify the downloads locally.</p>
     <p>Page focus events alone cannot establish LLM use or misconduct.</p>
     <p>References: <a href="https://policy.ufl.edu/policy/data-classification-policy/">UF data classification policy</a> and <a href="https://studentprivacy.ed.gov/faq/what-constitutes-de-identified-records-and-information">U.S. Department of Education de-identification guidance</a>.</p>
   </section>
