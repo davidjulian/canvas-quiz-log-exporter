@@ -187,7 +187,11 @@ def list_quiet_token(page):
         try:
             if not visible_frame(frame):
                 continue
-            values = view_log_locator(frame).evaluate_all(r"""items => items.map(e => {
+            values = view_log_locator(frame).evaluate_all(r"""items => items.filter(e => {
+              const r=e.getBoundingClientRect();
+              return r.width>0&&r.height>0&&getComputedStyle(e).visibility!=='hidden'&&
+                !e.disabled&&!e.closest('[aria-disabled="true"]');
+            }).map(e => {
               const row=e.closest('tr,[role="row"],li')||e.parentElement||e;
               return [e.getAttribute('href'),e.getAttribute('aria-label'),e.getAttribute('aria-labelledby'),
                 e.getAttribute('aria-disabled'),!!e.disabled,row.innerText||row.textContent||''];

@@ -310,6 +310,21 @@ class ModeratePageTests(unittest.TestCase):
         self.assertGreaterEqual(len(calls), 2)
         self.assertEqual(self.page.evaluate('logClicks'), 0)
 
+    def test_hidden_and_disabled_row_updates_do_not_repeat_the_full_scan(self):
+        self.page.evaluate('''document.querySelector('table').insertAdjacentHTML('beforeend',
+          '<tr hidden><td id="hidden-status">Old hidden status</td><td><button>View Log</button></td></tr>'+
+          '<tr><td id="disabled-status">Old disabled status</td><td><button disabled>View Log</button></td></tr>');''')
+        nav = self.navigator()
+        original = nav.read
+        def changed():
+            result = original()
+            self.page.evaluate("document.getElementById('hidden-status').textContent='New hidden status';document.getElementById('disabled-status').textContent='New disabled status'")
+            return result
+        with patch.object(nav, 'read', side_effect=changed) as scan:
+            state = nav.ready()
+        self.assertEqual(len(state[2]), 2)
+        self.assertEqual(scan.call_count, 1)
+
     def test_verified_control_is_rechecked_if_target_changes_before_click(self):
         nav = self.navigator()
         plan = nav.discover()[0]
