@@ -477,16 +477,14 @@ class WebCapture(capture.QuickCapture):
             marker = self.get_readiness_phrase()
             first = True
             for plan in self.plans:
-                navigator.goto(plan.number)
-                navigator.verify(plan)
+                verified = navigator.verify(plan, navigator.goto(plan.number))
                 self.app.update(current_page=plan.number)
                 for local_index in range(len(plan.signature)):
                     self.app.check_cancel()
-                    navigator.verify(plan)
                     baseline = capture.page_text(self.page)
                     if not marker or marker.casefold() in baseline.casefold():
                         raise capture.CaptureError("readiness_phrase_is_empty_or_already_on_moderate")
-                    original_pages = self.open_control(local_index, plan.signature)
+                    original_pages = self.open_control(local_index, plan.signature, verified_controls=verified[1])
                     text = capture.wait_log(self.page, marker, baseline, stable_seconds=self.settle,
                                             check_cancel=self.app.check_cancel)
                     if set(self.page.context.pages) != original_pages:
@@ -498,7 +496,7 @@ class WebCapture(capture.QuickCapture):
                         self.manifest["first_capture_locally_checked"] = True
                         self.checkpoint()
                         first = False
-                    navigator.restore_after_log(plan)
+                    verified = navigator.restore_after_log(plan)
                 self.manifest["moderate_pages"][plan.number - 1]["captured"] = True
                 self.checkpoint()
             self.manifest.update(page_loop_completed=True, student_pagination_completed=True)

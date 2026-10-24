@@ -161,6 +161,44 @@ def visible_frame(frame):
     return True
 
 
+def view_log_locator(frame):
+    return frame.get_by_role("button", name=VIEW_LOG_PREFIX).or_(
+        frame.get_by_role("link", name=VIEW_LOG_PREFIX)).or_(
+        frame.locator('a,button,[role="button"],[role="link"]').filter(
+            has_text=re.compile(r"^\s*view\s+log\s*$", re.I)))
+
+
+def control_signature(item):
+    text = " ".join(element_text(item).split())
+    label = " ".join((item.get_attribute("aria-label") or "").split())
+    row = item.locator("xpath=ancestor::*[self::tr or @role='row' or self::li][1]")
+    if not row.count():
+        row = item.locator("xpath=..")
+    context = json.dumps({"href": item.get_attribute("href"), "text": text, "label": label,
+                          "accessible_name": item.aria_snapshot(timeout=3000),
+                          "context": element_text(row) if row.count() else text}, sort_keys=True)
+    return digest(context)
+
+
+def list_quiet_token(page):
+    """Cheap local change detection; full identity checks remain authoritative."""
+    observations = []
+    for number, frame in enumerate(page.frames):
+        try:
+            if not visible_frame(frame):
+                continue
+            values = view_log_locator(frame).evaluate_all(r"""items => items.map(e => {
+              const row=e.closest('tr,[role="row"],li')||e.parentElement||e;
+              return [e.getAttribute('href'),e.getAttribute('aria-label'),e.getAttribute('aria-labelledby'),
+                e.getAttribute('aria-disabled'),!!e.disabled,row.innerText||row.textContent||''];
+            })""")
+            observations.append((number, values))
+        except Exception:
+            observations.append((number, 'inspection_in_progress'))
+    # Row text never leaves the local worker; only this temporary token is used.
+    return digest(json.dumps(observations, sort_keys=True))
+
+
 def controls_in_frame(frame):
     """Return local controls and identity hashes from one visible document."""
     if visible_frame(frame):
@@ -168,28 +206,16 @@ def controls_in_frame(frame):
         # Match computed accessible names, including aria-labelledby and labels
         # such as 'View Log for <student>'. These were present in the instructor's
         # count-only diagnostic even when exact text/name matching found none.
-        loc = frame.get_by_role("button", name=VIEW_LOG_PREFIX).or_(
-            frame.get_by_role("link", name=VIEW_LOG_PREFIX)).or_(
-            frame.locator('a,button,[role="button"],[role="link"]').filter(
-                has_text=re.compile(r"^\s*view\s+log\s*$", re.I)))
+        loc = view_log_locator(frame)
         for i in range(loc.count()):
             item = loc.nth(i)
             if not item.is_visible() or not item.is_enabled():
                 continue
-            text = " ".join(element_text(item).split())
-            label = " ".join((item.get_attribute("aria-label") or "").split())
-            row = item.locator("xpath=ancestor::*[self::tr or @role='row' or self::li][1]")
-            if not row.count():
-                row = item.locator("xpath=..")
             # Generated DOM IDs can change after Back; identity comes from the
             # accessible name and row text instead. Names never leave the local
             # process except in the intentionally saved rendered log page text.
-            context = json.dumps({"href": item.get_attribute("href"),
-                                  "text": text, "label": label,
-                                  "accessible_name": item.aria_snapshot(timeout=3000),
-                                  "context": element_text(row) if row.count() else text}, sort_keys=True)
             controls.append(item)
-            signatures.append(digest(context))
+            signatures.append(control_signature(item))
         return controls, tuple(signatures)
     return [], ()
 
@@ -482,11 +508,16 @@ class QuickCapture:
         self.checkpoint()
         print(f"Saved {len(self.manifest['saved_logs'])} log(s) locally.")
 
-    def open_control(self, index, signature):
+    def open_control(self, index, signature, verified_controls=None):
         self.check_cancel()
-        controls, observed = controls_on_page(self.page)
-        if observed != signature:
-            raise CaptureError("moderate_list_changed")
+        if verified_controls is None:
+            controls, observed = controls_on_page(self.page)
+            if observed != signature:
+                raise CaptureError("moderate_list_changed")
+        else:
+            controls = verified_controls
+            if control_signature(controls[index]) != signature[index]:
+                raise CaptureError("moderate_list_changed")
         original_pages = set(self.page.context.pages)
         controls[index].click()
         self.page.wait_for_timeout(300)

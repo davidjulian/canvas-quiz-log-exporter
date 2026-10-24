@@ -10,6 +10,10 @@ Invented tests cover navigation wrappers, nested paginators, unrelated-frame err
 
 The instructor confirmed that the repaired local app reached student name review on the UF Moderate page. Only the app phase and counts-only diagnostics were inspected here; no actual roster, student name, log text or screenshot was loaded into the conversation.
 
+Performance repair: row stability uses a batched local change token, followed by one authoritative full identity scan. A row change during that scan is rejected, and the selected control is checked again before clicking. The verified return state is reused instead of rescanning the roster twice more. Targeted invented tests cover the full-scan budget, mutation during the scan, a changed target before clicking, both export modes across pages and partial-run preservation.
+
+In one local invented 45-student comparison, the prior back/verify, redundant verification and next-click checks totaled 8.18 seconds. The optimized equivalent took 2.43 seconds. This excludes Canvas network loading and the separate 3-second log text stability interval. These illustrative timings do not predict live institutional performance. No running user collection was restarted or altered for this optimization.
+
 Final platform results will be recorded when the release checks finish.
 
 ## Version 0.13.1 validation

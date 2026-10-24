@@ -256,18 +256,21 @@ class ModeratePages:
         while time.monotonic() < deadline:
             self.check_cancel()
             try:
-                result = self.read()
-                _, _, signature, pager, number, context = result
-                key = (number, signature, context, json.dumps(pager, sort_keys=True))
-                ok = not capture.visibly_busy(self.page) and (expected_number is None or number == expected_number)
-                # Wait for the new rows as well as the paginator to change.
-                if previous_signature and signature == previous_signature:
-                    ok = False
-                if ok and key == stable and time.monotonic() - since >= self.stable_seconds:
-                    return result
-                if not ok or key != stable:
-                    since = time.monotonic() if ok else None
-                stable = key if ok else None
+                key = capture.list_quiet_token(self.page)
+                busy = capture.visibly_busy(self.page)
+                if not busy and key == stable and time.monotonic() - since >= self.stable_seconds:
+                    # Scan all identities once after the cheap quiet check. If
+                    # rows changed during that scan, discard it and wait again.
+                    result = self.read()
+                    _, _, signature, _, number, _ = result
+                    ok = expected_number is None or number == expected_number
+                    if previous_signature and signature == previous_signature:
+                        ok = False
+                    if ok and key == capture.list_quiet_token(self.page) and not capture.visibly_busy(self.page):
+                        return result
+                    stable, since = None, None
+                elif busy or key != stable:
+                    stable, since = (None, None) if busy else (key, time.monotonic())
             except capture.CaptureError as error:
                 if str(error) != 'moderate_pagination_list_not_ready':
                     raise

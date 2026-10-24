@@ -287,6 +287,39 @@ class ModeratePageTests(unittest.TestCase):
             self.navigator(check_cancel=cancelled).discover()
         self.assertEqual(self.page.evaluate('logClicks'), 0)
 
+    def test_stable_wait_does_one_authoritative_scan_instead_of_one_per_poll(self):
+        nav = self.navigator()
+        with patch.object(nav, 'read', wraps=nav.read) as scan:
+            state = nav.ready()
+        self.assertEqual(len(state[2]), 2)
+        self.assertEqual(scan.call_count, 1)
+
+    def test_row_change_during_authoritative_scan_is_discarded_before_capture(self):
+        nav = self.navigator()
+        plan = nav.discover()[0]
+        original = nav.read
+        calls = []
+        def changed():
+            result = original()
+            calls.append(True)
+            if len(calls) == 1:
+                self.page.evaluate("document.querySelector('td').textContent='Changed invented student'")
+            return result
+        with patch.object(nav, 'read', side_effect=changed), self.assertRaisesRegex(capture.CaptureError, 'moderate_list_changed'):
+            nav.verify(plan)
+        self.assertGreaterEqual(len(calls), 2)
+        self.assertEqual(self.page.evaluate('logClicks'), 0)
+
+    def test_verified_control_is_rechecked_if_target_changes_before_click(self):
+        nav = self.navigator()
+        plan = nav.discover()[0]
+        verified = nav.verify(plan)
+        self.page.evaluate("document.querySelector('td').textContent='Changed invented student'")
+        collector = capture.QuickCapture(self.page, Path(self.temp.name) / 'target-check')
+        with self.assertRaisesRegex(capture.CaptureError, 'moderate_list_changed'):
+            collector.open_control(0, plan.signature, verified_controls=verified[1])
+        self.assertEqual(self.page.evaluate('logClicks'), 0)
+
     def collector(self, mode='coded', stop_after=None):
         app = web.LocalApp(profile=Path(self.temp.name) / 'profile')
         app.update(run_id='invented')
