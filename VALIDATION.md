@@ -1,5 +1,19 @@
 # Validation
 
+Version 0.13.2, October 24, 2026.
+
+Moderate detection repair: tab selection again uses the established View Log control locator independently of pagination inspection. Pagination ignores student-table navigation wrappers, navigation without page controls, empty placeholders and page-size-only controls. Static page-one and whole-list range indicators support a single-page list. Browser locators handle controls inside open shadow roots. Unsupported noninteractive multiple-page indicators remain an error; additional pages are not silently ignored.
+
+Finding and page discovery run before a capture folder is created. A recoverable discovery failure leaves the same browser and sign-in context open for retry, even when keep-open is unchecked. Stop and Quit close it. On failure the interface exposes only count/flag/error-category diagnostics, never student names, log text, filter values or URLs. Errors in an unrelated visible frame do not discard an otherwise recognized student list. Setup values can be restored for an empty failed run without treating it as a previously collected quiz. Small rejected POST bodies are drained before returning 415, matching the existing bounded 403 handling to avoid Windows connection resets.
+
+Invented tests cover navigation wrappers, nested paginators, unrelated-frame errors, diagnostic privacy, empty/static/page-size-only widgets, shadow roots, noninteractive multiple-page refusal, whole-list range status, same-browser retry after a failed search, ambiguous-pagination retry state, Stop closure and restored initial settings. Earlier paging, export, summary and security tests remain in the suite.
+
+The instructor confirmed that the repaired local app reached student name review on the UF Moderate page. Only the app phase and counts-only diagnostics were inspected here; no actual roster, student name, log text or screenshot was loaded into the conversation.
+
+Final platform results will be recorded when the release checks finish.
+
+## Version 0.13.1 validation
+
 Version 0.13.1, October 24, 2026.
 
 Elapsed-time fallback repair: a readable submission event or last timed event is retained even if an earlier event timestamp is invalid. Away durations remain unavailable when timestamps cannot be trusted. The table labels last-event elapsed time as an estimate; the CSV retains the timing basis and reliability notes. An unreadable final event is not silently replaced with an earlier one. Mixed event order and conflicting submission times remain unavailable. A raw stop entry with an invalid clock is not mistaken for zero recorded stops.

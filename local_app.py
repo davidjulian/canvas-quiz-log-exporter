@@ -22,7 +22,7 @@ from urllib.parse import urlsplit
 import quick_capture as capture
 from coded_export import CodedExport, NamedExport
 from event_summary import summarize_text, write_summary
-from moderate_pages import ModeratePages, moderate_fingerprint
+from moderate_pages import ModeratePages, moderate_fingerprint, pagination_diagnostic
 
 ROOT = Path(__file__).resolve().parent
 DEFAULT_URL = "https://ufl.instructure.com/"
@@ -49,6 +49,7 @@ ERRORS = {
     "moderate_filters_changed": "The Moderate filters or quiz heading changed during the run. Collection stopped; completed files are preserved. Begin again with the intended filters.",
     "moderate_pagination_changed": "The Moderate page sequence changed after review. Collection stopped; completed files are preserved. Begin again and review the current list.",
     "moderate_pagination_limit": "The Moderate list exceeded this version’s safety limit of 1,000 pages or 5,000 log controls. Use a smaller filtered list.",
+    "moderate_pagination_inspection_failed": "The Moderate page controls could not be inspected. Canvas stays open. Wait for the student list, then try finding logs again. Diagnostic details contain only counts and error categories.",
 }
 
 
@@ -140,6 +141,7 @@ class LocalApp:
                       "summary_rows": [], "summary_ready": False, "summary_error": "",
                       "pagination_supported": True, "current_page": 0, "page_count": 0, "discovered_logs": 0,
                       "label_warning_supported": True,
+                      "moderate_retry_supported": True, "diagnostic": {},
                       "default_browser": "chrome" if sys.platform == "darwin" else "msedge",
                       "error": "", "run_id": "", "version": capture.VERSION}
 
@@ -205,6 +207,7 @@ class LocalApp:
                                   first_file="", archive_ready=False, warning_count=0, error="",
                                   summary_rows=[], summary_ready=False, summary_error="",
                                   current_page=0, page_count=0, discovered_logs=0,
+                                  diagnostic={},
                                   key_ready=False, export_mode=mode, folder_label=label,
                                   canvas_url=url, output_base=str(out.parent),
                                   keep_browser_open=keep_open, run_id=secrets.token_hex(8))
@@ -279,13 +282,30 @@ class LocalApp:
                             if fresh or url != previous_url:
                                 page.goto(url, wait_until="domcontentloaded", timeout=60000)
                             previous_url, previous_channel = url, channel
-                            self.await_action("navigate")
                             def one_tab_only(_):
                                 raise capture.CaptureError("multiple_moderate_tabs")
-                            page = capture.choose_moderate_page(context, prompt=one_tab_only, check_cancel=self.check_cancel,
-                                                                candidate_fingerprint=moderate_fingerprint)
+                            find_error, diagnostic = "", {}
+                            while True:
+                                self.await_action("navigate", error=find_error, diagnostic=diagnostic, browser_open=True)
+                                self.update(error="", diagnostic={}, current_page=0, page_count=0, discovered_logs=0)
+                                try:
+                                    page = capture.choose_moderate_page(context, prompt=one_tab_only, check_cancel=self.check_cancel,
+                                                                        candidate_fingerprint=moderate_fingerprint)
+                                    navigator = ModeratePages(page, check_cancel=self.check_cancel, progress=self.update)
+                                    navigator.discover()
+                                    break
+                                except capture.CaptureError as error:
+                                    category = str(error)
+                                    if category == "stopped_by_user" or self.stop_event.is_set() or not context.pages:
+                                        raise
+                                    # Finding student controls opens no logs and writes no
+                                    # capture folder. Keep the same browser/session for retry.
+                                    diagnostic = pagination_diagnostic(context)
+                                    find_error = ERRORS.get(category, "The Moderate page could not be read reliably. Canvas stays open. Check that the student list has loaded and try again.")
+                                    if category == "no_unambiguous_moderate_tab_found":
+                                        find_error = "The Moderate list was not recognized. Canvas stays open. Wait for the student list and try finding logs again. Diagnostic details contain no names or log text."
                             collector = WebCapture(page, out, self, mode=mode)
-                            collector.run()
+                            collector.run(navigator=navigator)
                             self.check_cancel()
                         except Exception as error:
                             category = str(error) if isinstance(error, capture.CaptureError) else (
@@ -438,11 +458,11 @@ class WebCapture(capture.QuickCapture):
         self.app.update(total=len(self.proposed_names), names=[{"position": i + 1, "name": name,
                         "moderate_page": pages.get(i, 1)} for i, (name, _) in self.proposed_names.items()])
 
-    def run(self):
+    def run(self, navigator=None):
         """Discover all names once, then capture the reviewed pages in order."""
-        navigator = ModeratePages(self.page, check_cancel=self.app.check_cancel, progress=self.app.update)
+        navigator = navigator or ModeratePages(self.page, check_cancel=self.app.check_cancel, progress=self.app.update)
         try:
-            self.plans = navigator.discover()
+            self.plans = navigator.plans or navigator.discover()
             signature = tuple(item for plan in self.plans for item in plan.signature)
             self.manifest.update(detected_controls=len(signature), student_pagination_completed=False,
                                  moderate_pages=[{"page": p.number, "log_controls": len(p.signature),
@@ -622,9 +642,9 @@ class Handler(BaseHTTPRequestHandler):
     def json_reply(self, value, status=200):
         self.reply(status, json.dumps(value, ensure_ascii=True).encode("utf-8"))
 
-    def reject(self):
+    def discard_small_post_body(self):
         # Consume a small rejected POST body so closing the connection does not
-        # reset it before Windows clients receive the 403 response. Never parse
+        # reset it before Windows clients receive the error response. Never parse
         # or log rejected data; limit both size and waiting time.
         if self.command == "POST":
             try:
@@ -638,6 +658,8 @@ class Handler(BaseHTTPRequestHandler):
                         self.connection.settimeout(previous)
             except (OSError, ValueError):
                 pass
+    def reject(self):
+        self.discard_small_post_body()
         self.send_error(403)
         return False
 
@@ -674,6 +696,7 @@ class Handler(BaseHTTPRequestHandler):
         if not self.allowed(api=True):
             return
         if self.headers.get("Content-Type", "").split(";")[0] != "application/json":
+            self.discard_small_post_body()
             self.send_error(415)
             return
         try:

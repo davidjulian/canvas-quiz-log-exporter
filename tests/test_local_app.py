@@ -177,6 +177,7 @@ class LocalLogicTests(unittest.TestCase):
             approved.mkdir()
             with patch("playwright.sync_api.sync_playwright", return_value=manager), \
                     patch.object(web, "WebCapture"), \
+                    patch.object(web, "ModeratePages"), \
                     patch.object(web.capture, "choose_moderate_page", return_value=page), \
                     patch.object(app, "await_action"):
                 app.command("launch", {"url": web.DEFAULT_URL, "output": str(approved), "keep_browser_open": True})
@@ -330,7 +331,7 @@ class BrowserUITests(HTTPTests):
         self.assertEqual(self.app.snapshot()["phase"], phase)
 
     def test_updated_assets_request_restart_for_an_older_running_app(self):
-        for key in ("summary_rows", "label_warning_supported"):
+        for key in ("summary_rows", "label_warning_supported", "moderate_retry_supported"):
             with self.subTest(key=key):
                 previous = self.app.state.pop(key)
                 self.page.reload()
@@ -398,7 +399,20 @@ class BrowserUITests(HTTPTests):
         self.assertIn("<img", self.page.locator("#previous-folder-label").inner_text())
         self.assertFalse(self.page.evaluate("document.documentElement.scrollWidth > innerWidth"))
 
-    def launch_synthetic(self, mode="coded", label="", keep_open=False, fixture=FIXTURE):
+    def test_initial_setup_values_restore_without_treating_a_failed_search_as_a_previous_run(self):
+        self.app.update(canvas_url="https://canvas-fixture.invalid/", output_base=str(self.output),
+                        folder_label="Example lab", export_mode="named", keep_browser_open=True)
+        self.page.reload()
+        self.page.locator("#canvas-url").wait_for()
+        from playwright.sync_api import expect
+        expect(self.page.locator("#folder-label")).to_have_value("Example lab")
+        self.assertEqual(self.page.locator("#output").input_value(), str(self.output))
+        self.assertTrue(self.page.locator("#mode-named").is_checked())
+        self.assertTrue(self.page.locator("#keep-canvas-open").is_checked())
+        self.assertEqual(self.app.snapshot()["run_id"], "")
+        self.assertEqual(self.page.locator("#launch").inner_text(), "Open Canvas")
+
+    def launch_synthetic(self, mode="coded", label="", keep_open=False, fixture=FIXTURE, find=True):
         from playwright.sync_api import BrowserType
         original = BrowserType.launch_persistent_context
         self.synthetic_launches = 0
@@ -431,9 +445,58 @@ class BrowserUITests(HTTPTests):
         self.assertTrue(self.page.locator("#mode-named").is_disabled())
         self.assertTrue(self.page.locator("#folder-label").is_disabled())
         self.assertTrue(self.page.locator("#keep-canvas-open").is_disabled())
+        if find:
+            self.page.locator("#moderate").click()
+            self.page.locator("#name-rows input").nth(2).wait_for()
+            self.assert_phase("review")
+
+    def test_failed_finding_keeps_canvas_open_and_retries_in_the_same_browser(self):
+        original = web.capture.choose_moderate_page
+        calls = []
+        def choose(*args, **kwargs):
+            calls.append(True)
+            if len(calls) == 1:
+                raise capture.CaptureError("no_unambiguous_moderate_tab_found")
+            return original(*args, **kwargs)
+        with patch.object(web.capture, "choose_moderate_page", side_effect=choose):
+            self.launch_synthetic(find=False)
+            self.page.locator("#moderate").click()
+            self.page.locator("#error").wait_for(state="visible")
+            self.assert_phase("navigate")
+            state = self.app.snapshot()
+            self.assertTrue(state["browser_open"])
+            self.assertEqual(state["names"], [])
+            self.assertEqual(self.synthetic_closes, 0)
+            self.assertFalse(Path(state["output"]).exists())
+            self.assertEqual(self.page.locator("#moderate").inner_text(), "Try finding logs again")
+            self.assertTrue(state["diagnostic"])
+            self.assertNotIn("Synthetic student", json.dumps(state["diagnostic"]))
+            self.assertNotIn("canvas-fixture.invalid", json.dumps(state["diagnostic"]))
+            self.page.locator("#moderate").click()
+            self.page.locator("#name-rows input").nth(2).wait_for()
+            self.assert_phase("review")
+            self.assertEqual(self.synthetic_launches, 1)
+            self.assertEqual(self.synthetic_closes, 0)
+            self.assertEqual(self.app.snapshot()["diagnostic"], {})
+            self.page.locator("#stop").click()
+            self.assert_phase("stopped")
+            self.assertEqual(self.synthetic_closes, 1)
+
+    def test_ambiguous_pagination_keeps_canvas_open_with_counts_only_diagnostic(self):
+        from test_moderate_pages import FIXTURE as PAGINATED_FIXTURE
+        self.launch_synthetic(fixture=PAGINATED_FIXTURE + '<script>bad=true;draw()</script>', find=False)
         self.page.locator("#moderate").click()
-        self.page.locator("#name-rows input").nth(2).wait_for()
-        self.assert_phase("review")
+        self.page.locator("#error").wait_for(state="visible")
+        self.assert_phase("navigate")
+        state = self.app.snapshot()
+        self.assertTrue(state["browser_open"])
+        self.assertEqual(self.synthetic_closes, 0)
+        self.assertFalse(Path(state["output"]).exists())
+        self.assertEqual(state["diagnostic"]["tabs"][0]["result_category"], "moderate_pagination_not_recognized")
+        self.assertNotIn("Example Student", json.dumps(state["diagnostic"]))
+        self.page.locator("#stop").click()
+        self.assert_phase("stopped")
+        self.assertEqual(self.synthetic_closes, 1)
 
     def test_paginated_ui_reviews_all_pages_once_and_downloads_combined_summary(self):
         from test_moderate_pages import FIXTURE as PAGINATED_FIXTURE

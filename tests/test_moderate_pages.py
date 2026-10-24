@@ -6,13 +6,13 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 import zipfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import quick_capture as capture
 import local_app as web
-from moderate_pages import ModeratePages, moderate_fingerprint
+from moderate_pages import ModeratePages, moderate_fingerprint, pagination_diagnostic
 
 
 FIXTURE = r'''<!doctype html><html><body><main></main><script>
@@ -79,6 +79,100 @@ class ModeratePageTests(unittest.TestCase):
         plans = self.navigator().discover()
         self.assertEqual(len(plans), 3)
         self.assertEqual(sum(len(p.signature) for p in plans), 6)
+
+    def test_navigation_wrapping_students_is_not_a_single_page_paginator(self):
+        self.page.evaluate('''pages=1;draw();document.querySelector('main nav').remove();
+          const main=document.querySelector('main'), outer=document.createElement('nav');
+          outer.setAttribute('aria-label','Quiz pages');main.replaceWith(outer);outer.append(main);
+          document.querySelectorAll('tr').forEach(e=>e.insertAdjacentHTML('beforeend','<td><a href="#attempt">1</a></td>'));''')
+        nav = self.navigator()
+        plans = nav.discover()
+        self.assertEqual(len(plans), 1)
+        self.assertEqual(len(plans[0].signature), 2)
+        self.assertGreater(nav.diagnostic[0]['excluded_student_list_roots'], 0)
+
+    def test_student_wrapper_does_not_hide_the_nested_real_paginator(self):
+        self.page.evaluate('''const main=document.querySelector('main'), outer=document.createElement('nav');
+          outer.setAttribute('aria-label','Quiz pages');main.replaceWith(outer);outer.append(main);''')
+        plans = self.navigator().discover()
+        self.assertEqual(len(plans), 3)
+        self.assertEqual(sum(len(p.signature) for p in plans), 6)
+
+    def test_quiz_page_navigation_without_numbered_controls_is_not_a_paginator(self):
+        self.page.evaluate('''pages=1;draw();document.querySelector('main nav').remove();
+          document.body.insertAdjacentHTML('afterbegin','<nav aria-label="Quiz page navigation"><a aria-current="page">Moderate</a><a>Build</a><a>Reports</a></nav>');''')
+        nav = self.navigator()
+        self.assertEqual(len(nav.discover()), 1)
+        self.assertEqual(nav.diagnostic[0]['pagination_roots'], 0)
+        self.assertGreater(nav.diagnostic[0]['excluded_navigation_roots'], 0)
+
+    def test_empty_pagination_placeholder_is_a_single_student_page(self):
+        self.page.evaluate('''pages=1;draw();const pager=document.querySelector('main nav');
+          pager.dataset.cid='Pagination';pager.innerHTML='';pager.style.height='24px';''')
+        nav = self.navigator()
+        plans = nav.discover()
+        self.assertEqual(len(plans), 1)
+        self.assertEqual(len(plans[0].signature), 2)
+        self.assertEqual(nav.diagnostic[0]['ignored_empty_pagination_roots'], 1)
+
+    def test_static_single_page_indicator_does_not_require_a_clickable_button(self):
+        self.page.evaluate('pages=1;draw();const p=document.querySelector("main nav");p.dataset.cid="Pagination";p.innerHTML="<span>1</span>"')
+        nav = self.navigator()
+        self.assertEqual(len(nav.discover()), 1)
+        self.assertEqual(nav.diagnostic[0]['pagers'][0]['current_page_recognized'], True)
+
+    def test_page_size_selector_alone_does_not_imply_more_student_pages(self):
+        self.page.evaluate('''pages=1;draw();const p=document.querySelector('main nav');p.dataset.cid='Pagination';
+          p.innerHTML='<label>Students per page<select aria-label="Students per page"><option>50</option></select></label>';''')
+        nav = self.navigator()
+        self.assertEqual(len(nav.discover()), 1)
+        self.assertEqual(nav.diagnostic[0]['ignored_page_size_only_roots'], 1)
+
+    def test_noninteractive_multiple_page_numbers_are_not_silently_ignored(self):
+        self.page.evaluate('''draw();const p=document.querySelector('main nav');p.dataset.cid='Pagination';
+          p.innerHTML='<span>1</span><span>2</span><span>3</span>';''')
+        with self.assertRaisesRegex(capture.CaptureError, 'moderate_pagination_not_recognized'):
+            self.navigator().discover()
+
+    def test_whole_list_range_status_can_identify_a_single_page(self):
+        self.page.evaluate('''pages=1;draw();const p=document.querySelector('main nav');p.dataset.cid='Pagination';
+          p.textContent='1–2 of 2';''')
+        self.assertEqual(len(self.navigator().discover()), 1)
+
+    def test_numbered_pagination_inside_open_shadow_root_is_read_by_locators(self):
+        self.page.evaluate('''const originalDraw=draw;draw=()=>{originalDraw();
+          const pager=document.querySelector('main nav');if(!pager)return;
+          const host=document.createElement('div');host.dataset.cid='Pagination';
+          host.attachShadow({mode:'open'}).innerHTML=pager.innerHTML;pager.replaceWith(host);
+        };draw()''')
+        plans = self.navigator().discover()
+        self.assertEqual(len(plans), 3)
+        self.assertEqual(sum(len(p.signature) for p in plans), 6)
+
+    def test_unrelated_visible_frame_inspection_error_does_not_discard_student_list(self):
+        real = self.page.main_frame
+        unrelated = MagicMock()
+        unrelated.locator.return_value.count.return_value = 1
+        unrelated.locator.return_value.evaluate.side_effect = RuntimeError('PRIVATE_UNRELATED_FRAME_ERROR')
+        page = MagicMock()
+        page.frames = [real, unrelated]
+        controls, signature = capture.controls_in_frame(real)
+        with patch.object(capture, 'visible_frame', return_value=True), \
+                patch.object(capture, 'controls_in_frame', side_effect=lambda frame: (controls, signature) if frame is real else ([], ())):
+            nav = ModeratePages(page)
+            self.assertEqual(nav.read()[2], signature)
+        self.assertEqual(nav.diagnostic[1]['inspection_error_category'], 'browser_inspection_error')
+        self.assertNotIn('PRIVATE_UNRELATED_FRAME_ERROR', json.dumps(nav.diagnostic))
+
+    def test_diagnostic_has_counts_and_categories_without_student_text(self):
+        self.page.evaluate('bad=true;draw()')
+        report = pagination_diagnostic(self.context)
+        serialized = json.dumps(report)
+        self.assertNotIn('Example Student', serialized)
+        self.assertNotIn('moderate-fixture.invalid', serialized)
+        self.assertNotIn('Moderate invented quiz', serialized)
+        self.assertEqual(report['tabs'][0]['result_category'], 'moderate_pagination_not_recognized')
+        self.assertEqual(report['tabs'][0]['frames'][0]['view_log_controls'], 2)
 
     def test_empty_middle_page_does_not_end_discovery(self):
         self.page.evaluate('empty=[2];draw()')

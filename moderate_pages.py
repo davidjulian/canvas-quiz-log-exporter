@@ -4,6 +4,7 @@ No Canvas APIs or private endpoints. Only recognized page controls are clicked.
 Names and filter values stay in this process; the manifest stores hashes/counts.
 """
 import json
+import re
 import time
 from dataclasses import dataclass
 
@@ -15,8 +16,9 @@ ROOTS = ('nav[aria-label*="pagin" i],[role="navigation"][aria-label*="pagin" i],
          '[data-cid="Pagination"],[data-testid*="pagination" i],'
          '[class~="pagination"],[class~="Pagination"]')
 BUTTONS = 'a,button,[role="button"],[role="link"]'
+PAGE_NUMBER = re.compile(r"^(?:(?:go to )?(?:current )?page\s*)?(\d+)(?:\s*[,:(-]?\s*(?:current(?: page)?|page|of \d+)\)?)?$", re.I)
 PROBE = r"""body => {
- const visible=e=>!!(e.getClientRects().length)&&getComputedStyle(e).visibility!=='hidden';
+ const visible=e=>{const r=e.getBoundingClientRect();return r.width>0&&r.height>0&&getComputedStyle(e).visibility!=='hidden'};
  const clean=s=>(s||'').replace(/\s+/g,' ').trim();
  const label=e=>clean(e.getAttribute('aria-label') ||
    (e.getAttribute('aria-labelledby')||'').split(/\s+/).map(id=>document.getElementById(id)?.textContent||'').join(' ') || e.textContent);
@@ -24,8 +26,15 @@ PROBE = r"""body => {
    return m?Number(m[1]):null;};
  const disabled=e=>e.matches(':disabled') || e.getAttribute('aria-disabled')==='true' ||
    !!e.closest('[aria-disabled="true"],li.disabled');
+ const isLog=e=>/^view\s+log\b/i.test(label(e))||/^view\s+log$/i.test(clean(e.textContent));
+ const containsLogs=e=>[...e.querySelectorAll(CONTROL_SELECTOR)].some(isLog);
  const all=[...body.querySelectorAll(ROOT_SELECTOR)];
- const roots=all.filter(e=>visible(e)&&!all.some(other=>other!==e&&visible(other)&&other.contains(e)));
+ // Canvas can label the navigation around its entire student table as Pages.
+ // Such a container is not the student paginator, even if its rows have numbers.
+ const pageLike=e=>[...e.querySelectorAll(CONTROL_SELECTOR)].some(c=>number(c)!==null||/^(?:(?:go to )?(?:next|previous|prev|first|last)(?:\s+page)?|[<>»›«‹←→])$/i.test(label(c))) ||
+   e.matches('[data-cid="Pagination"],[data-testid*="pagination" i],[class~="pagination"],[class~="Pagination"]');
+ const eligible=all.filter(e=>visible(e)&&!containsLogs(e)&&pageLike(e));
+ const roots=eligible.filter(e=>!eligible.some(other=>other!==e&&other.contains(e)));
  const pagers=roots.map(root=>{
    const controls=[...root.querySelectorAll(CONTROL_SELECTOR)].filter(visible);
    const items=controls.map(e=>({index:[...root.querySelectorAll(CONTROL_SELECTOR)].indexOf(e),
@@ -37,6 +46,7 @@ PROBE = r"""body => {
    const next=items.filter(x=>/^(?:go to )?next(?:\s+page)?(?:\s*[>»›→])?$/i.test(x.label)||/^[>»›→]$/.test(x.label));
    const previous=items.filter(x=>/^(?:go to )?(?:previous|prev)(?:\s+page)?(?:\s*[<«‹←])?$/i.test(x.label)||/^[<«‹←]$/.test(x.label));
    return {root:all.indexOf(root),current:current.length===1?current[0]:null,items,
+     selectedMarkers:marked.length,
      next,previous,trailingEllipsis:/(?:…|\.{2,})\s*$/.test(root.textContent)};
  });
  // Only hashed locally. Do not inspect storage, network, hidden inputs or URLs.
@@ -46,14 +56,107 @@ PROBE = r"""body => {
      e.value??clean(e.textContent),e.type==='checkbox'||e.type==='radio'?e.checked:null]);
  const heading=[...body.querySelectorAll('h1')].map(e=>clean(e.textContent));
  const hints=[...body.querySelectorAll(CONTROL_SELECTOR)].filter(visible)
+   .filter(e=>!e.closest('table,[role="table"],[role="grid"],[role="row"],tr'))
    .some(e=>/^(?:(?:go to )?(?:current )?page\s*\d+|(?:go to )?(?:next|previous) page)$/i.test(label(e))||
      (e.hasAttribute('aria-current')&&number(e)!==null)) ||
-   [...body.querySelectorAll('nav,[role="navigation"]')].filter(visible)
+   [...body.querySelectorAll('nav,[role="navigation"]')].filter(e=>visible(e)&&!containsLogs(e))
      .some(e=>[...e.querySelectorAll(CONTROL_SELECTOR)].filter(c=>visible(c)&&number(c)!==null).length>1);
  const moderate=[...body.querySelectorAll('h1,h2,[role="tab"][aria-selected="true"]')]
    .some(e=>visible(e)&&/^Moderate\b/i.test(clean(e.textContent)));
- return {pagers,context:JSON.stringify([heading,fields]),hints,moderate};
+ return {pagers,context:JSON.stringify([heading,fields]),hints,moderate,
+   excludedListRoots:all.filter(e=>visible(e)&&containsLogs(e)).length,
+   excludedNonPageRoots:all.filter(e=>visible(e)&&!containsLogs(e)&&!pageLike(e)).length};
 }""".replace('ROOT_SELECTOR', json.dumps(ROOTS)).replace('CONTROL_SELECTOR', json.dumps(BUTTONS))
+
+
+def control_label(item):
+    label = item.get_attribute('aria-label') or ''
+    if not label:
+        # The locator snapshot uses the computed accessible name, including
+        # labels inside open shadow roots; a body DOM query cannot see those.
+        snapshot = item.aria_snapshot(timeout=3000).splitlines()
+        match = re.match(r'^\s*- (?:button|link|combobox) "([^"]*)"', snapshot[0] if snapshot else '')
+        label = match[1] if match else capture.element_text(item)
+    return ' '.join(label.split())
+
+
+def refine_pagers(frame, probe):
+    """Recognize empty/single-page widgets and use locator access when needed."""
+    roots = frame.locator(ROOTS)
+    pagers, ignored, page_size_only = [], 0, 0
+    for original in probe['pagers']:
+        pager = dict(original)
+        root = None
+        for index in range(roots.count()):
+            candidate = roots.nth(index)
+            if candidate.evaluate('(e, p) => e === e.ownerDocument.body.querySelectorAll(p.selector)[p.index]',
+                                  {'selector': ROOTS, 'index': original['root']}):
+                root, pager['root'] = candidate, index
+                break
+        if root is None:
+            raise capture.CaptureError('moderate_pagination_list_not_ready')
+        if pager['current'] is not None:
+            pagers.append(pager)
+            continue
+        items, next_items, previous = [], [], []
+        controls = root.locator(BUTTONS)
+        for index in range(controls.count()):
+            item = controls.nth(index)
+            if not item.is_visible():
+                continue
+            label = control_label(item)
+            match = PAGE_NUMBER.fullmatch(label)
+            if not match:
+                match = PAGE_NUMBER.fullmatch(' '.join(capture.element_text(item).split()))
+            info = {'index': index, 'number': int(match[1]) if match else None,
+                    'disabled': not item.is_enabled(), 'label': label}
+            items.append(info)
+            if re.fullmatch(r'(?:go to )?next(?:\s+page)?|[>»›→]', label, re.I):
+                next_items.append(info)
+            if re.fullmatch(r'(?:go to )?(?:previous|prev)(?:\s+page)?|[<«‹←]', label, re.I):
+                previous.append(info)
+        marker = root.locator('[aria-current="page"],[aria-current="true"],[aria-selected="true"],[data-selected="true"],li.active,li.current,.page-item.active')
+        selected = []
+        for index in range(marker.count()):
+            item = marker.nth(index)
+            if item.is_visible():
+                match = PAGE_NUMBER.fullmatch(control_label(item)) or PAGE_NUMBER.fullmatch(' '.join(capture.element_text(item).split()))
+                if match:
+                    selected.append(int(match[1]))
+        disabled_numbers = [i['number'] for i in items if i['number'] is not None and i['disabled']]
+        current = set(selected or (disabled_numbers if len(disabled_numbers) == 1 else []))
+        page_text = ' '.join(capture.element_text(root).split())
+        number_text = root.get_by_text(re.compile(r'^\s*\d+\s*$'))
+        indicators = {int(capture.element_text(number_text.nth(i)).strip()) for i in range(number_text.count())
+                      if number_text.nth(i).is_visible()}
+        operative = any(i['number'] is not None for i in items) or bool(next_items or previous)
+        size_fields = root.locator('select,[role="combobox"],[aria-haspopup="listbox"]')
+        size_labels = [control_label(size_fields.nth(i)) for i in range(size_fields.count()) if size_fields.nth(i).is_visible()]
+        size_text = page_text + ' ' + ' '.join(size_labels)
+        if (size_labels and not next_items and not previous and not current and len(indicators) <= 1
+                and re.search(r'per\s+page|page\s+size', size_text, re.I)):
+            page_size_only += 1
+            continue
+        if not operative and not current:
+            whole_range = re.fullmatch(r'(?:showing\s+)?1\s*[-–—]\s*(\d+)\s+of\s+(\d+)(?:\s+(?:students|items|results|entries))?', page_text, re.I)
+            if re.fullmatch(r'(?:page\s*)?1(?:\s*(?:of|/)\s*1)?', page_text, re.I):
+                current = {1}
+            elif whole_range and int(whole_range[1]) == int(whole_range[2]):
+                current = {1}
+            elif not indicators and not re.search(r'\d', page_text):
+                # Canvas renders an empty pagination wrapper for a small class.
+                # Its presence alone does not mean that additional pages exist.
+                ignored += 1
+                continue
+        pager.update(items=items, next=next_items, previous=previous,
+                     current=next(iter(current)) if len(current) == 1 else None,
+                     selectedMarkers=len(selected), locatorFallback=True,
+                     visibleNumberIndicators=len(indicators))
+        pagers.append(pager)
+    probe['pagers'] = pagers
+    probe['ignoredEmptyPagers'] = ignored
+    probe['ignoredPageSizePagers'] = page_size_only
+    return probe
 
 
 @dataclass
@@ -73,15 +176,45 @@ class ModeratePages:
         self.context_hash = None
         self.paginated = None
         self.plans = []
+        self.diagnostic = []
 
     def read(self):
         candidates = []
         empty = []
-        for frame in self.page.frames:
-            if not capture.visible_frame(frame) or not frame.locator('body').count():
+        self.diagnostic = []
+        inspection_failed = False
+        for frame_number, frame in enumerate(self.page.frames, 1):
+            info = {"frame_number": frame_number}
+            self.diagnostic.append(info)
+            try:
+                info['visible'] = capture.visible_frame(frame)
+                if not info['visible']:
+                    continue
+                controls, signature = capture.controls_in_frame(frame)
+                info['view_log_controls'] = len(controls)
+                info['body_present'] = bool(frame.locator('body').count())
+                if not info['body_present']:
+                    continue
+                probe = refine_pagers(frame, frame.locator('body').evaluate(PROBE))
+                info.update(pagination_roots=len(probe['pagers']),
+                            excluded_student_list_roots=probe['excludedListRoots'],
+                            excluded_navigation_roots=probe['excludedNonPageRoots'],
+                            ignored_empty_pagination_roots=probe['ignoredEmptyPagers'],
+                            ignored_page_size_only_roots=probe['ignoredPageSizePagers'],
+                            unrecognized_page_control_hint=probe['hints'],
+                            moderate_marker=probe['moderate'],
+                            pagers=[{'current_page_recognized': p['current'] is not None,
+                                     'selected_markers': p['selectedMarkers'],
+                                     'visible_number_indicators': p.get('visibleNumberIndicators'),
+                                     'locator_fallback_used': p.get('locatorFallback', False),
+                                     'numbered_controls': sum(x['number'] is not None for x in p['items']),
+                                     'next_controls': len(p['next']), 'previous_controls': len(p['previous'])}
+                                    for p in probe['pagers']])
+            except Exception as error:
+                info['inspection_error_category'] = capture.safe_error_category(error)
+                if info.get('view_log_controls'):
+                    inspection_failed = True
                 continue
-            controls, signature = capture.controls_in_frame(frame)
-            probe = frame.locator('body').evaluate(PROBE)
             if controls:
                 candidates.append((frame, controls, signature, probe))
             elif probe['pagers'] and (self.context_hash == capture.digest(probe['context']) or
@@ -89,6 +222,8 @@ class ModeratePages:
                 empty.append((frame, controls, signature, probe))
         candidates = candidates or empty
         if len(candidates) != 1:
+            if inspection_failed:
+                raise capture.CaptureError('moderate_pagination_inspection_failed')
             raise capture.CaptureError('moderate_pagination_list_not_ready')
         frame, controls, signature, probe = candidates[0]
         context = capture.digest(probe['context'])
@@ -245,5 +380,27 @@ class ModeratePages:
 
 def moderate_fingerprint(page):
     """Tab selection can recognize a marked empty Moderate student page too."""
+    try:
+        controls, signature = capture.controls_on_page(page)
+        return len(controls), signature
+    except capture.CaptureError as error:
+        if str(error) != 'no_view_log_controls_found':
+            raise
     _, controls, signature, _, number, context = ModeratePages(page).read()
     return len(controls), (number, signature, context)
+
+
+def pagination_diagnostic(context):
+    """Only counts, flags and fixed error categories; never names/text/URLs."""
+    tabs = []
+    for number, page in enumerate(context.pages, 1):
+        navigator = ModeratePages(page)
+        try:
+            navigator.read()
+            category = 'readable'
+        except capture.CaptureError as error:
+            category = str(error)
+        except Exception as error:
+            category = capture.safe_error_category(error)
+        tabs.append({'tab_number': number, 'result_category': category, 'frames': navigator.diagnostic})
+    return {'version': capture.VERSION, 'tabs': tabs}

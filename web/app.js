@@ -9,7 +9,7 @@
   let busy = false;
   let modeRestored = false;
   let browserRestored = false;
-  let labelRun = "";
+  let labelRun = null;
   let summaryKey = "";
   let summarySort = {key: "position", desc: false};
   let labelWarningRun = "";
@@ -107,7 +107,7 @@
     }
     const phase = state.phase;
     const active = !terminal.has(phase);
-    if (state.run_id && labelRun !== state.run_id) {
+    if (labelRun === null || (state.run_id && labelRun !== state.run_id)) {
       $("folder-label").value = state.folder_label || "";
       $("keep-canvas-open").checked = !!state.keep_browser_open;
       if (state.canvas_url) $("canvas-url").value = state.canvas_url;
@@ -127,8 +127,12 @@
     $("status").textContent = status;
     $("error").textContent = state.error || "";
     show("error", !!state.error);
+    const diagnostic = state.diagnostic || {};
+    show("diagnostic-details", Object.keys(diagnostic).length > 0);
+    $("diagnostic-text").textContent = Object.keys(diagnostic).length ? JSON.stringify(diagnostic, null, 2) : "";
+    $("moderate").textContent = state.error ? "Try finding logs again" : "I’m on Moderate — find logs";
     for (const id of ["canvas-url", "output", "folder-label", "keep-canvas-open", "browse", "browser", "launch"]) $(id).disabled = active || busy;
-    const supportsRunOptions = typeof state.folder_label === "string" && typeof state.keep_browser_open === "boolean" && Array.isArray(state.summary_rows) && state.pagination_supported === true && state.label_warning_supported === true;
+    const supportsRunOptions = typeof state.folder_label === "string" && typeof state.keep_browser_open === "boolean" && Array.isArray(state.summary_rows) && state.pagination_supported === true && state.label_warning_supported === true && state.moderate_retry_supported === true;
     show("update-note", !supportsRunOptions);
     if (!supportsRunOptions) for (const id of ["launch", "folder-label", "keep-canvas-open"]) $(id).disabled = true;
     $("launch").textContent = phase === "idle" ? "Open Canvas" : state.browser_open ? "Use open Canvas for a new run" : "Open Canvas for a new run";
