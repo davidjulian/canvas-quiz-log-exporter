@@ -22,6 +22,9 @@ class EventSummaryTests(unittest.TestCase):
         self.assertEqual(row["total_elapsed_seconds"], 120)
         self.assertEqual(row["stopped_viewing_events"], 2)
         self.assertEqual(row["average_away_seconds"], 25)
+        self.assertEqual(row["total_away_seconds"], 50)
+        self.assertEqual(row["percent_elapsed_away"], 41.67)
+        self.assertEqual(row["longest_away_seconds"], 30)
         self.assertEqual(row["paired_intervals"], 2)
         self.assertEqual(row["unpaired_stop_events"], 0)
         self.assertEqual(row["notes"], [])
@@ -39,6 +42,9 @@ class EventSummaryTests(unittest.TestCase):
         self.assertEqual(zero["paired_intervals"], 1)
         self.assertIsNone(none["average_away_seconds"])
         self.assertEqual(none["stopped_viewing_events"], 0)
+        self.assertEqual(none["total_away_seconds"], 0)
+        self.assertEqual(none["percent_elapsed_away"], 0)
+        self.assertIsNone(none["longest_away_seconds"])
 
     def test_unmatched_stop_does_not_assume_a_return_at_submission(self):
         row = summarize_text(log("00:00 Session started", f"00:10 {STOP}", "00:30 Resumed",
@@ -47,6 +53,21 @@ class EventSummaryTests(unittest.TestCase):
         self.assertEqual(row["average_away_seconds"], 20)
         self.assertEqual(row["paired_intervals"], 1)
         self.assertEqual(row["unpaired_stop_events"], 1)
+        self.assertEqual(row["total_away_seconds"], 20)
+        self.assertEqual(row["percent_elapsed_away"], 33.33)
+        self.assertTrue(any("actual away time may be greater" in note for note in row["notes"]))
+
+    def test_only_unpaired_stops_leave_away_measures_unknown(self):
+        row = summarize_text(log("00:00 Session started", f"00:10 {STOP}", "01:00 Quiz submitted"))
+        self.assertEqual(row["stopped_viewing_events"], 1)
+        for measure in ("total_away_seconds", "percent_elapsed_away", "longest_away_seconds"):
+            self.assertIsNone(row[measure])
+
+    def test_zero_elapsed_denominator_has_no_percentage(self):
+        row = summarize_text(log("00:00 Session started", f"00:00 {STOP}", "00:00 Resumed", "00:00 Quiz submitted"))
+        self.assertEqual(row["total_away_seconds"], 0)
+        self.assertEqual(row["longest_away_seconds"], 0)
+        self.assertIsNone(row["percent_elapsed_away"])
 
     def test_consecutive_stops_exclude_ambiguous_cluster(self):
         row = summarize_text(log("00:00 Session started", f"00:10 {STOP}", f"00:12 {STOP}", "00:30 Resumed",
@@ -73,6 +94,8 @@ class EventSummaryTests(unittest.TestCase):
         self.assertEqual(row["total_elapsed_seconds"], 50)
         self.assertEqual(row["elapsed_basis"], "last visible event")
         self.assertTrue(any("not a verified total" in note for note in row["notes"]))
+        self.assertEqual(row["percent_elapsed_away"], 40)
+        self.assertTrue(any("Percentage uses only" in note for note in row["notes"]))
 
     def test_post_submission_focus_events_are_excluded(self):
         row = summarize_text(log("00:00 Session started", "01:00 Quiz submitted", f"01:10 {STOP}", "01:30 Resumed"))

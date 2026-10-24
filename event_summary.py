@@ -30,6 +30,14 @@ submission are noted. No return time is invented for a final unmatched stop.
 Blank duration means unavailable, not zero. Paired interval count is the mean's
 denominator, which may be smaller than the recorded stop count.
 
+Total paired away seconds is the sum of valid pair durations; longest paired
+away seconds is their maximum. These exclude unmatched/ambiguous periods and
+may understate actual away time. Percentage away is 100 * total paired away
+seconds / the displayed elapsed seconds. When elapsed time is only the last
+visible value, the percentage is also provisional and flagged. Zero elapsed
+time has no defined percentage. No stop events means zero recorded away time;
+an unavailable parser result or only unpaired stops means unknown, not zero.
+
 The private named CSV contains identified education records even in coded mode.
 It is not included in the log sharing ZIP. It has no AI or network dependency.
 The original log downloads remain unchanged if summary parsing fails.
@@ -59,6 +67,7 @@ def elapsed_display(seconds):
 def summarize_text(text):
     result = {"total_elapsed_seconds": None, "stopped_viewing_events": None,
               "average_away_seconds": None, "paired_intervals": 0,
+              "total_away_seconds": None, "percent_elapsed_away": None, "longest_away_seconds": None,
               "unpaired_stop_events": None, "elapsed_basis": "unavailable", "notes": []}
     lines = text.splitlines()
     starts = [i for i, line in enumerate(lines) if line.strip().casefold() == "elapsed time"]
@@ -147,10 +156,22 @@ def summarize_text(text):
     result["unpaired_stop_events"] = result["stopped_viewing_events"] - len(durations)
     if durations:
         result["average_away_seconds"] = round(sum(durations) / len(durations), 2)
+        result["total_away_seconds"] = sum(durations)
+        result["longest_away_seconds"] = max(durations)
+    elif result["stopped_viewing_events"] == 0:
+        result["total_away_seconds"] = 0
+    elapsed = result["total_elapsed_seconds"]
+    if elapsed and result["total_away_seconds"] is not None:
+        result["percent_elapsed_away"] = round(100 * result["total_away_seconds"] / elapsed, 2)
+        if result["elapsed_basis"] == "last visible event":
+            notes.append("Percentage uses only the last visible elapsed value, not a verified full attempt duration.")
+    elif elapsed == 0:
+        notes.append("Zero elapsed time: percentage away is undefined.")
     if consecutive_stops:
         notes.append("Consecutive stop entries: ambiguous clusters excluded from the average.")
     if result["unpaired_stop_events"]:
         notes.append("Some stop events have no unambiguous return; excluded from the average.")
+        notes.append("Total, percentage and longest away time use paired intervals only; actual away time may be greater.")
     if orphan_resumes:
         notes.append("Return entries without a preceding stop were found.")
     return result
@@ -160,14 +181,16 @@ def write_summary(private_folder, rows):
     folder = Path(private_folder)
     temporary = folder / "event_summary.csv.tmp"
     columns = ("Student name", "Total elapsed time (HH:MM:SS)", "Stopped viewing events",
-               "Average away time (seconds)", "View Log position", "Record ID", "Paired intervals",
+               "Average away time (seconds)", "Total paired away time (seconds)", "Elapsed time away (%)",
+               "Longest paired away period (seconds)", "View Log position", "Record ID", "Paired intervals",
                "Unpaired stop events", "Elapsed time basis", "Notes")
     with temporary.open("w", encoding="utf-8-sig", newline="") as handle:
         writer = csv.writer(handle)
         writer.writerow(columns)
         for row in rows:
             writer.writerow((csv_name(row["student_name"]), elapsed_display(row["total_elapsed_seconds"]),
-                             row["stopped_viewing_events"], row["average_away_seconds"], row["position"],
+                             row["stopped_viewing_events"], row["average_away_seconds"], row["total_away_seconds"],
+                             row["percent_elapsed_away"], row["longest_away_seconds"], row["position"],
                              row.get("record_id", ""), row["paired_intervals"], row["unpaired_stop_events"],
                              row["elapsed_basis"], " ".join(row["notes"])))
     temporary.replace(folder / "event_summary.csv")

@@ -481,6 +481,7 @@ class WebCapture(capture.QuickCapture):
         except Exception:
             summary = {"total_elapsed_seconds": None, "stopped_viewing_events": None,
                        "average_away_seconds": None, "paired_intervals": 0,
+                       "total_away_seconds": None, "percent_elapsed_away": None, "longest_away_seconds": None,
                        "unpaired_stop_events": None, "elapsed_basis": "unavailable",
                        "notes": ["Summary could not be calculated; original text download is preserved."]}
         if records[-1]["same_page_text_as_another_control"]:

@@ -100,7 +100,11 @@
       </section>
 
       <div id="output-section" class="output-section" hidden><div class="eyebrow">LOCAL OUTPUT</div><p id="output-path"></p><p id="archive-note" class="hint"></p><button id="open-folder" class="secondary">Open output folder</button> <button id="open-key" class="secondary" hidden>Open private name key</button><p id="output-privacy" class="hint">Keep private/ and name_key.csv private. Review coded files before sharing: identifying details can remain. This app does not certify FERPA compliance.</p></div>
-      <section id="event-summary" class="output-section" hidden aria-labelledby="summary-heading">
+
+      <div class="workspace-footer"><span id="activity" role="status" aria-live="polite">No collection is running.</span><button id="stop" class="danger" hidden>Stop</button></div>
+    </main>
+  </div>
+      <section id="event-summary" class="panel summary-panel" hidden aria-labelledby="summary-heading">
         <h3 id="summary-heading">Local event summary</h3>
         <p class="hint">One row per downloaded attempt; repeated names remain separate. Select a column heading to sort. The average uses only unambiguous Stopped viewing → Resumed pairs. Missing returns are excluded, not assumed to last until the end.</p>
         <div id="summary-error" class="notice" hidden></div>
@@ -109,15 +113,15 @@
           <th scope="col"><button type="button" class="text-button" data-summary-sort="total_elapsed_seconds">Total elapsed time*</button></th>
           <th scope="col"><button type="button" class="text-button" data-summary-sort="stopped_viewing_events">Stopped viewing events</button></th>
           <th scope="col"><button type="button" class="text-button" data-summary-sort="average_away_seconds">Average away time (seconds)</button></th>
+          <th scope="col"><button type="button" class="text-button" data-summary-sort="total_away_seconds">Total paired away time (seconds)</button></th>
+          <th scope="col"><button type="button" class="text-button" data-summary-sort="percent_elapsed_away">Elapsed time away (%)</button></th>
+          <th scope="col"><button type="button" class="text-button" data-summary-sort="longest_away_seconds">Longest paired away period (seconds)</button></th>
         </tr></thead><tbody id="summary-rows"></tbody></table></div>
-        <p class="hint">*Uses a recognized submission event when available; otherwise shows the last visible elapsed value with a note. This may not be the full attempt duration. Expand any “Check log” note. A blank average means unavailable, not zero.</p>
+        <p class="hint">*Uses a recognized submission event when available; otherwise shows the last visible elapsed value and flags the elapsed time and percentage as provisional. Away durations use only valid pairs and may understate actual time when events are unmatched. Expand any “Check log” note. Unavailable values (—, or blank in the CSV) are not zero.</p>
         <button id="open-summary" type="button" class="secondary" disabled>Open named summary CSV</button>
         <p class="hint">This table and <strong>private/event_summary.csv</strong> contain student names, including in coded mode. The CSV and calculation notes stay outside the log sharing ZIP. Only new downloads are summarized.</p>
         <p class="notice">These are descriptive log measurements. They cannot identify another website or application, establish ChatGPT use or prove misconduct. Instructure advises against using quiz logs to validate academic integrity.</p>
       </section>
-      <div class="workspace-footer"><span id="activity" role="status" aria-live="polite">No collection is running.</span><button id="stop" class="danger" hidden>Stop</button></div>
-    </main>
-  </div>
   <footer class="page-footer"><p>Local log downloads and descriptive focus-event summaries.<br>Page focus events alone cannot establish LLM use or misconduct.</p><button id="quit" class="text-button">Quit local app</button></footer>
 </div>
 <dialog id="about-dialog" aria-labelledby="about-title">

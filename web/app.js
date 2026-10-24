@@ -84,6 +84,9 @@
       value.textContent = row.average_away_seconds === null ? "—" : row.average_away_seconds.toFixed(2);
       pairs.className = "hint"; pairs.textContent = row.stopped_viewing_events === null ? "Pairing unavailable" : `${row.paired_intervals} paired; ${row.unpaired_stop_events} unpaired stops`;
       mean.append(value, pairs); tr.append(mean); $("summary-rows").append(tr);
+      for (const metric of [row.total_away_seconds, row.percent_elapsed_away, row.longest_away_seconds]) {
+        const td = document.createElement("td"); td.textContent = metric == null ? "—" : String(metric); tr.append(td);
+      }
     }
     document.querySelectorAll("[data-summary-sort]").forEach(button => {
       button.parentElement.setAttribute("aria-sort", button.dataset.summarySort === summarySort.key ? (summarySort.desc ? "descending" : "ascending") : "none");
