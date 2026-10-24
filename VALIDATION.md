@@ -1,6 +1,14 @@
 # Validation
 
-Version 0.11.0, October 23, 2026.
+Version 0.12.0, October 23, 2026.
+
+New local summary: one row per new downloaded attempt, with reviewed name, elapsed time, stop count and mean duration of unambiguous stop/return pairs. It supports MM:SS and HH:MM:SS, inline and split rows, blank lines, and both documented stop wording variants. Tests cover no away events versus zero-second pairs, unmatched and duplicate stops, consecutive stop clusters, orphan returns, reverse/mixed ordering, invalid clocks, missing/conflicting submission and post-submission events. Missing values remain unknown. The source and test cases are inspectable in event_summary.py and tests/test_event_summary.py.
+
+CSV tests verify formula-safe student names and blank unavailable values. Browser workflow tests verify table values and sorting, the private named CSV in both export modes, its exclusion from sharing ZIPs, native opening of the fixed summary path, and text/ZIP preservation when both parsing and summary writing fail. Earlier extraction, privacy and browser reuse checks remain in the suite. Only newly collected text is summarized.
+
+A user-supplied redacted file was checked locally for layout compatibility. Its actual names, timestamps and metric values were not printed into the chat or copied into source/test fixtures. All automated test records are invented.
+
+## Earlier platform validation
 
 Windows verification: the full 72-test suite passed with none skipped in 93 seconds. After the final settings restoration adjustment, all 25 local interface tests passed with none skipped in 61 seconds. Browser tests use invented records, temporary profiles and temporary output folders.
 

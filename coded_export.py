@@ -12,8 +12,9 @@ from quick_capture import log_from_began
 ID = re.compile(r"R-[0-9a-f]{16}\Z")
 REVIEW_TEXT = """CODED QUIZ LOG DOWNLOADS
 
-These files retain the displayed event text and elapsed times. No events are
-classified and no analysis is performed. Names in the reviewed Moderate
+These files retain the displayed event text and elapsed times. No computed
+summary is embedded in these logs. A separate named descriptive event summary
+may be saved in private/; it is excluded from this ZIP. Names in the reviewed Moderate
 mapping are replaced locally. Start and finish calendar dates and clock times, recognizable
 email addresses, web addresses and IPv4 addresses are omitted.
 
@@ -114,7 +115,7 @@ class NamedExport(CodedExport):
     review_text = ("NAMED QUIZ LOG DOWNLOADS\n\nThese logs contain student names and original dates, times and event text. "
                    "No coding or identifier removal is performed. No name key is created. "
                    "Use only storage and services authorized for identified education records and their required data classification. "
-                   "Follow all institutional privacy and FERPA rules. No analysis or automatic AI upload is performed.\n")
+                   "Follow all institutional privacy and FERPA rules. A separate named event summary may be saved in private/; it is excluded from this ZIP. No automatic AI upload is performed.\n")
 
     def add_named_record(self, filename, content):
         if Path(filename).name != filename or not filename.startswith("log_") or not filename.endswith(".txt") or "/" in filename or "\\" in filename:

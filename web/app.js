@@ -10,6 +10,8 @@
   let modeRestored = false;
   let browserRestored = false;
   let labelRun = "";
+  let summaryKey = "";
+  let summarySort = {key: "position", desc: false};
   $("about-open").addEventListener("click", () => $("about-dialog").showModal());
   $("about-close").addEventListener("click", () => $("about-dialog").close());
   const terminal = new Set(["idle", "complete", "stopped", "error"]);
@@ -48,6 +50,45 @@
     $("local-error").hidden = !message;
   }
   function show(id, visible) { $(id).hidden = !visible; }
+  function elapsed(value) {
+    if (value === null || value === undefined) return "—";
+    return [Math.floor(value / 3600), Math.floor(value / 60) % 60, value % 60].map(n => String(n).padStart(2, "0")).join(":");
+  }
+  function renderSummary(rows) {
+    const key = JSON.stringify([rows, summarySort]);
+    if (key === summaryKey) return;
+    summaryKey = key;
+    const ordered = [...rows].sort((a, b) => {
+      const x = a[summarySort.key], y = b[summarySort.key];
+      if (x === null && y !== null) return 1;
+      if (y === null && x !== null) return -1;
+      const comparison = typeof x === "string" ? x.localeCompare(y) : (x ?? 0) - (y ?? 0);
+      return (summarySort.desc ? -comparison : comparison) || a.position - b.position;
+    });
+    $("summary-rows").replaceChildren();
+    for (const row of ordered) {
+      const tr = document.createElement("tr");
+      const name = document.createElement("td");
+      const label = document.createElement("div"); label.textContent = row.student_name; name.append(label);
+      const position = document.createElement("small"); position.className = "hint"; position.textContent = `View Log ${row.position}`; name.append(position);
+      if (row.notes.length) {
+        const details = document.createElement("details"), summary = document.createElement("summary"), note = document.createElement("p");
+        summary.textContent = "Check log"; note.textContent = row.notes.join(" "); note.className = "hint";
+        details.append(summary, note); name.append(details);
+      }
+      tr.append(name);
+      for (const value of [elapsed(row.total_elapsed_seconds), row.stopped_viewing_events ?? "—"]) {
+        const td = document.createElement("td"); td.textContent = String(value); tr.append(td);
+      }
+      const mean = document.createElement("td"), value = document.createElement("div"), pairs = document.createElement("small");
+      value.textContent = row.average_away_seconds === null ? "—" : row.average_away_seconds.toFixed(2);
+      pairs.className = "hint"; pairs.textContent = row.stopped_viewing_events === null ? "Pairing unavailable" : `${row.paired_intervals} paired; ${row.unpaired_stop_events} unpaired stops`;
+      mean.append(value, pairs); tr.append(mean); $("summary-rows").append(tr);
+    }
+    document.querySelectorAll("[data-summary-sort]").forEach(button => {
+      button.parentElement.setAttribute("aria-sort", button.dataset.summarySort === summarySort.key ? (summarySort.desc ? "descending" : "ascending") : "none");
+    });
+  }
   function render(next) {
     state = next;
     if (!browserRestored) {
@@ -77,7 +118,7 @@
     $("error").textContent = state.error || "";
     show("error", !!state.error);
     for (const id of ["canvas-url", "output", "folder-label", "keep-canvas-open", "browse", "browser", "launch"]) $(id).disabled = active || busy;
-    const supportsRunOptions = typeof state.folder_label === "string" && typeof state.keep_browser_open === "boolean";
+    const supportsRunOptions = typeof state.folder_label === "string" && typeof state.keep_browser_open === "boolean" && Array.isArray(state.summary_rows);
     show("update-note", !supportsRunOptions);
     if (!supportsRunOptions) for (const id of ["launch", "folder-label", "keep-canvas-open"]) $(id).disabled = true;
     $("launch").textContent = phase === "idle" ? "Open Canvas" : state.browser_open ? "Use open Canvas for a new run" : "Open Canvas for a new run";
@@ -142,6 +183,12 @@
     $("result-description").textContent = `${state.saved} of ${state.total} displayed logs saved. ${state.archive_ready ? "Your download ZIP is ready." : "Check the output folder for completed files."}${state.browser_open ? " Canvas remains open. Open another quiz and go to Build → Moderate, update the folder label, then select Use open Canvas for a new run." : ""}`;
     show("open-key", !!state.key_ready);
     show("duplicates", state.warning_count > 0);
+    const rows = state.summary_rows || [];
+    show("event-summary", rows.length > 0);
+    renderSummary(rows);
+    $("open-summary").disabled = !state.summary_ready || busy || active;
+    $("summary-error").textContent = state.summary_error || "";
+    show("summary-error", !!state.summary_error);
     $("activity").textContent = active ? (phase === "checking" || phase === "review" || phase === "navigate" ? "Waiting for your next step." : "Local collection is running.") : "No collection is running.";
   }
   async function refresh() {
@@ -153,6 +200,11 @@
       : "Review coded files before sharing. The private folder still contains identifying records.";
   }
   for (const id of ["mode-coded", "mode-named"]) $(id).addEventListener("change", updateModeNote);
+  document.querySelectorAll("[data-summary-sort]").forEach(button => button.addEventListener("click", () => {
+    const key = button.dataset.summarySort;
+    summarySort = {key, desc: summarySort.key === key ? !summarySort.desc : key !== "student_name"};
+    renderSummary(state.summary_rows || []);
+  }));
   async function action(name, extra = {}) {
     if (busy) return;
     busy = true; localError(""); render(state);
@@ -180,7 +232,7 @@
   $("checked").addEventListener("click", () => action("checked"));
   $("stop").addEventListener("click", () => action("stop"));
   for (const id of ["names-reviewed", "first-reviewed"]) $(id).addEventListener("change", () => render(state));
-  for (const [id, path] of [["open-folder", "/api/open-folder"], ["open-first", "/api/open-first"], ["open-key", "/api/open-key"], ["open-key-check", "/api/open-key"]]) {
+  for (const [id, path] of [["open-folder", "/api/open-folder"], ["open-first", "/api/open-first"], ["open-key", "/api/open-key"], ["open-key-check", "/api/open-key"] , ["open-summary", "/api/open-summary"]]) {
     $(id).addEventListener("click", async () => {
       localError("");
       try { await api(path, {}); } catch (error) { localError(error.message); }

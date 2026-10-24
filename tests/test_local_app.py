@@ -112,6 +112,23 @@ class LocalLogicTests(unittest.TestCase):
         with self.assertRaisesRegex(web.UIError, "closing"):
             app.command("launch", {})
 
+    def test_summary_opens_only_the_fixed_private_csv_after_capture_stops(self):
+        with tempfile.TemporaryDirectory() as temp:
+            out = Path(temp)
+            (out / "private").mkdir()
+            (out / "private" / "event_summary.csv").touch()
+            app = web.LocalApp()
+            app.update(output=str(out), summary_ready=True, phase="capturing")
+            with self.assertRaisesRegex(web.UIError, "Wait until"):
+                app.open_local(summary=True)
+            app.update(phase="complete")
+            with patch.object(web, "open_path") as opened:
+                app.open_local(summary=True)
+                opened.assert_called_once_with(out / "private" / "event_summary.csv")
+            app.update(summary_ready=False)
+            with self.assertRaises(web.UIError):
+                app.open_local(summary=True)
+
     def test_quit_closes_an_idle_retained_browser_on_its_own_worker(self):
         page, context, manager = MagicMock(), MagicMock(), MagicMock()
         context.pages = [page]
@@ -276,8 +293,7 @@ class BrowserUITests(HTTPTests):
         self.assertEqual(self.app.snapshot()["phase"], phase)
 
     def test_updated_assets_request_restart_for_an_older_running_app(self):
-        self.app.state.pop("folder_label")
-        self.app.state.pop("keep_browser_open")
+        self.app.state.pop("summary_rows")
         self.page.reload()
         self.page.locator("#update-note").wait_for(state="visible")
         self.assertTrue(self.page.locator("#launch").is_disabled())
@@ -350,6 +366,26 @@ class BrowserUITests(HTTPTests):
         self.assertEqual(self.synthetic_closes, 0)
         out = Path(state["output"])
         self.assertTrue(out.name.startswith("Synthetic_quiz_label-"))
+        self.assertTrue(state["summary_ready"])
+        self.assertEqual(len(state["summary_rows"]), 3)
+        self.assertEqual(self.page.locator("#summary-rows tr").count(), 3)
+        for summary in state["summary_rows"]:
+            self.assertEqual(summary["total_elapsed_seconds"], 40)
+            self.assertEqual(summary["stopped_viewing_events"], 1)
+            self.assertEqual(summary["average_away_seconds"], 20)
+            self.assertEqual(summary["paired_intervals"], 1)
+        with (out / "private" / "event_summary.csv").open(encoding="utf-8-sig", newline="") as handle:
+            named_summary = list(capture.csv.DictReader(handle))
+        self.assertEqual(named_summary[0]["Student name"], "'=Synthetic corrected name")
+        self.assertEqual(named_summary[0]["Average away time (seconds)"], "20.0")
+        with patch.object(web, "open_path") as open_summary:
+            self.page.locator("#open-summary").click()
+            deadline = time.monotonic() + 5
+            while not open_summary.called and time.monotonic() < deadline:
+                self.page.wait_for_timeout(50)
+            open_summary.assert_called_once_with(out / "private" / "event_summary.csv")
+        self.page.locator('[data-summary-sort="student_name"]').click()
+        self.assertEqual(self.page.locator('[data-summary-sort="student_name"]').locator("..").get_attribute("aria-sort"), "ascending")
         manifest = json.loads((out / "private" / "manifest.json").read_text())
         self.assertTrue(manifest["page_loop_completed"])
         self.assertFalse(manifest["all_students_verified"])
@@ -448,12 +484,17 @@ class BrowserUITests(HTTPTests):
         self.assertEqual(state["export_mode"], "named")
         self.assertFalse(state["browser_open"])
         self.assertEqual(self.synthetic_closes, 1)
+        self.assertTrue(state["summary_ready"])
+        self.assertEqual(state["summary_rows"][0]["student_name"], "Synthetic student 1")
+        self.assertEqual(state["summary_rows"][0]["record_id"], "")
         out = Path(state["output"])
         self.assertFalse((out / "private" / "name_key.csv").exists())
         self.assertFalse((out / "coded-logs.zip").exists())
+        self.assertTrue((out / "private" / "event_summary.csv").exists())
         manifest = json.loads((out / "private" / "manifest.json").read_text())
         self.assertEqual(len(manifest["saved_logs"]), 3)
         with zipfile.ZipFile(out / "named-logs.zip") as archive:
+            self.assertNotIn("event_summary.csv", archive.namelist())
             for index, record in enumerate(manifest["saved_logs"], 1):
                 self.assertNotIn("record_id", record)
                 self.assertIn(f"Synthetic_student_{index}", record["file"])
@@ -463,6 +504,24 @@ class BrowserUITests(HTTPTests):
                 self.assertIn("Finished Tuesday, September 29, 2026 at 12:20 PM", text)
                 self.assertNotIn("Record ID:", text)
                 self.assertNotIn("[calendar date", text)
+
+    def test_summary_failure_preserves_text_capture_and_partial_zip(self):
+        with patch.object(web, "summarize_text", side_effect=ValueError("synthetic parser failure")), \
+                patch.object(web, "write_summary", side_effect=OSError("synthetic private write failure")):
+            self.launch_synthetic()
+            self.page.locator("#names-reviewed").check()
+            self.page.locator("#start").click()
+            self.page.locator("#open-first").wait_for(state="visible", timeout=30000)
+            self.assert_phase("checking")
+            self.assertEqual(self.app.snapshot()["saved"], 1)
+            self.assertIsNone(self.app.snapshot()["summary_rows"][0]["stopped_viewing_events"])
+            self.assertFalse(self.app.snapshot()["summary_ready"])
+            self.assertTrue(self.page.locator("#summary-error").is_visible())
+            self.page.locator("#stop").click()
+            self.assert_phase("stopped")
+            out = Path(self.app.snapshot()["output"])
+            self.assertTrue((out / "coded-logs.zip").is_file())
+            self.assertTrue((out / self.app.snapshot()["first_file"]).is_file())
 
     def test_mobile_layout_and_names_rendered_as_text(self):
         self.assertNotIn("UF approved OneDrive is fine.", self.page.locator("body").inner_text())

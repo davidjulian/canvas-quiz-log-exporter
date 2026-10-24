@@ -1,10 +1,10 @@
 # Canvas Quiz Log Exporter
 
-A local Windows and macOS app for downloading the displayed event text from Canvas **New Quizzes**. It opens each **View Log** on one Moderate page, saves the text, and returns to the student list. It performs **no analysis**.
+A local Windows and macOS app for downloading the displayed event text from Canvas **New Quizzes**. It opens each **View Log** on one Moderate page, saves the text, and returns to the student list. It also creates a **local descriptive focus-event summary** for new downloads.
 
 [Downloads and setup website](https://davidjulian.github.io/canvas-quiz-log-exporter/) · [Release files](https://github.com/davidjulian/canvas-quiz-log-exporter/releases/latest)
 
-Version 0.11.0. Requires **Windows 11+ or macOS 14+ (Intel or Apple silicon), Python 3.10 or newer, and installed Microsoft Edge or Google Chrome**. The local interface can open in your usual browser, but the dedicated Canvas window must use Edge or Chrome; Safari is not supported for collection. This is a local Python app, not a standalone executable or a hosted Canvas service. It uses your own authorized instructor browser session; no Canvas API token is requested.
+Version 0.12.0. Requires **Windows 11+ or macOS 14+ (Intel or Apple silicon), Python 3.10 or newer, and installed Microsoft Edge or Google Chrome**. The local interface can open in your usual browser, but the dedicated Canvas window must use Edge or Chrome; Safari is not supported for collection. This is a local Python app, not a standalone executable or a hosted Canvas service. It uses your own authorized instructor browser session; no Canvas API token is requested.
 
 ## Install and open
 
@@ -63,6 +63,19 @@ With the option unchecked, the Canvas window closes after collection as before. 
 
 The **About** button explains both modes, the workflow and privacy responsibilities. The internal page-loading check runs automatically and is not a user setting.
 
+## Local event summary (new downloads only)
+
+The app automatically shows a sortable table for each new collection with the requested columns: **student name**, **total elapsed time**, **Stopped viewing events**, and **average away time in seconds**. Each downloaded attempt/control is a separate row; repeated names are not merged. The number of paired intervals and any unpaired stops appear with the average. Expand **Check log** for row-specific limitations.
+
+After collection finishes or stops, **Open named summary CSV** opens **private/event_summary.csv**. Its first four columns match the table; additional columns identify the control position, coded ID when present, pairing counts, elapsed time basis and notes. **private/summary_method.txt** documents the calculations. Both files contain or accompany identified education records and must stay on approved storage. They are excluded from both coded and named log sharing ZIPs. No summary import of earlier files is provided.
+
+- Each unambiguous **Stopped viewing → Resumed** pair contributes one duration; the average is the sum of those durations divided by the number of valid pairs. Intervening answers do not end an away period. Zero-second pairs are kept.
+- Stops without a return, returns without a stop, consecutive stops and timestamp problems are flagged. Unmatched or ambiguous periods do not receive an invented duration. A blank average means unavailable, not zero.
+- Total elapsed time uses a recognized submission event when present. Otherwise it is the **last visible elapsed value**, explicitly flagged as not a verified full attempt duration. Calendar timestamps are not used. Instructure notes that the Moderate page's duration can be more accurate for timed quizzes.
+- Summary problems never block the text downloads. Unreadable layouts produce blank/flagged summary values. A summary write failure leaves the local table available and reports that the CSV could not be saved.
+
+Only downloaded text is summarized, so hidden or unloaded events can bias the results. A stopped run produces a partial table. Focus events do not reveal another website or application, establish ChatGPT use or prove prohibited behavior. Instructure advises against using quiz logs to validate academic integrity or identify cheating: [New Quizzes Moderate guide](https://community.instructure.com/en/kb/articles/661091-unknown).
+
 ## Coded files and private records
 
 Coded mode assigns a fresh random ID to each displayed View Log control/attempt. IDs do not encode a name, Canvas ID or roster position. They are newly generated each run. Multiple attempts for one student have different IDs; equal display names are not automatically merged because different students can share a name.
@@ -89,7 +102,7 @@ The dedicated browser profile stays in `%LOCALAPPDATA%\CanvasQuizExporter\Browse
 
 One run processes **only the View Log controls currently displayed on one Moderate page**. It does not advance student pagination, reveal hidden attempts, scroll virtual lists, expand details or load additional event pages. A first-file check does not prove every later capture is complete. The private manifest leaves whole-student and whole-event completeness unverified. Only rendered text from the single Began line onward is downloaded; surrounding Canvas navigation is removed.
 
-Original event wording and relative elapsed times are retained. There is no event recognition, classification, scoring, outlier detection or analysis. Page focus events alone cannot establish LLM use or misconduct. The app targets English New Quizzes layouts and same-tab View Log navigation. Other layouts may need adaptation.
+Original event wording and relative elapsed times are retained in the downloaded logs. The separate summary calculates descriptive focus-event counts and paired durations. There is no misconduct scoring, automatic outlier classification or inference about another website or application. Page focus events alone cannot establish LLM use or misconduct. The app targets English New Quizzes layouts and same-tab View Log navigation. Other layouts may need adaptation.
 
 ## Troubleshooting and safe reports
 

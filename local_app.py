@@ -21,6 +21,7 @@ from urllib.parse import urlsplit
 
 import quick_capture as capture
 from coded_export import CodedExport, NamedExport
+from event_summary import summarize_text, write_summary
 
 ROOT = Path(__file__).resolve().parent
 DEFAULT_URL = "https://ufl.instructure.com/"
@@ -129,6 +130,7 @@ class LocalApp:
                       "folder_label": "",
                       "canvas_url": DEFAULT_URL, "output_base": "",
                       "keep_browser_open": False, "browser_open": False,
+                      "summary_rows": [], "summary_ready": False, "summary_error": "",
                       "default_browser": "chrome" if sys.platform == "darwin" else "msedge",
                       "error": "", "run_id": "", "version": capture.VERSION}
 
@@ -187,6 +189,7 @@ class LocalApp:
                 self.stop_event.clear()
                 self.state.update(phase="opening", saved=0, total=0, names=[], output=str(out),
                                   first_file="", archive_ready=False, warning_count=0, error="",
+                                  summary_rows=[], summary_ready=False, summary_error="",
                                   key_ready=False, export_mode=mode, folder_label=label,
                                   canvas_url=url, output_base=str(out.parent),
                                   keep_browser_open=keep_open, run_id=secrets.token_hex(8))
@@ -358,7 +361,7 @@ end try'''], capture_output=True, text=True, check=True, timeout=300)
         finally:
             self.dialog_lock.release()
 
-    def open_local(self, first=False, key=False):
+    def open_local(self, first=False, key=False, summary=False):
         state = self.snapshot()
         out = Path(state["output"])
         if not state["output"] or not out.is_dir():
@@ -368,6 +371,12 @@ end try'''], capture_output=True, text=True, check=True, timeout=300)
             if not state["key_ready"]:
                 raise UIError("The private name key will be available after you review the names and start.")
             path = out / "private" / "name_key.csv"
+        if summary:
+            if state["phase"] not in TERMINAL:
+                raise UIError("Wait until collection finishes or stops before opening the summary CSV.")
+            if not state["summary_ready"]:
+                raise UIError("The named event summary is not available yet.")
+            path = out / "private" / "event_summary.csv"
         if not path.exists():
             raise UIError("That local file is no longer available.")
         open_path(path)
@@ -383,6 +392,7 @@ class WebCapture(capture.QuickCapture):
         self.run_out = Path(out)
         self.run_out.mkdir(parents=True, exist_ok=False)
         self.record_ids = {}
+        self.summary_rows = []
         self.downloads = CodedExport(self.run_out) if mode == "coded" else NamedExport(self.run_out)
         super().__init__(page, self.run_out / "private", settle=settle, check_cancel=app.check_cancel, trim_menu=True)
         self.manifest["interface"] = "local_web_app"
@@ -464,6 +474,26 @@ class WebCapture(capture.QuickCapture):
         first_file = "logs/" + records[0]["file"]
         self.app.update(saved=len(records), first_file=first_file,
                         warning_count=sum(r["same_page_text_as_another_control"] for r in records))
+        # Summary failure must not turn a successful text download into an
+        # extraction failure. It cannot change the original captures or ZIP.
+        try:
+            summary = summarize_text(text)
+        except Exception:
+            summary = {"total_elapsed_seconds": None, "stopped_viewing_events": None,
+                       "average_away_seconds": None, "paired_intervals": 0,
+                       "unpaired_stop_events": None, "elapsed_basis": "unavailable",
+                       "notes": ["Summary could not be calculated; original text download is preserved."]}
+        if records[-1]["same_page_text_as_another_control"]:
+            summary["notes"].append("Capture text matches another attempt; review both originals.")
+        summary.update(student_name=self.names[index][0], position=index + 1,
+                       record_id=self.record_ids.get(index, ""))
+        self.summary_rows.append(summary)
+        self.app.update(summary_rows=list(self.summary_rows))
+        try:
+            write_summary(self.out, self.summary_rows)
+            self.app.update(summary_ready=True, summary_error="")
+        except Exception:
+            self.app.update(summary_ready=False, summary_error="The named summary CSV could not be saved. Original log downloads are preserved; the local table is still available.")
 
     def bundle(self):
         self.downloads.bundle()
@@ -586,6 +616,8 @@ class Handler(BaseHTTPRequestHandler):
                 result = app.open_local(first=True)
             elif self.path == "/api/open-key":
                 result = app.open_local(key=True)
+            elif self.path == "/api/open-summary":
+                result = app.open_local(summary=True)
             elif self.path == "/api/quit":
                 app.shutdown()
                 result = {}

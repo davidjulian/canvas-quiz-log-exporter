@@ -18,7 +18,7 @@ from urllib.parse import urlsplit
 
 VIEW_LOG = re.compile(r"view\s+log", re.I)
 VIEW_LOG_PREFIX = re.compile(r"^view\s+log\b", re.I)
-VERSION = "0.11.0"
+VERSION = "0.12.0"
 
 
 class CaptureError(Exception):
