@@ -8,7 +8,9 @@ Invented regression cases cover invalid earlier and final clocks, a readable sub
 
 Folder label warning: a new run with the same label (including case/whitespace-only changes or another blank label) requires Change label or explicit Use same label. The confirmation is tied to the previous run ID, so a stale confirmation is rejected. The warning does not open, close or navigate Canvas and does not start another collection. Tests cover first-run behavior, blocking before worker/file changes, retained-browser reuse after confirmation, changing the label, Escape cancellation, literal label rendering, blank labels, mobile layout and restart notices for older app processes.
 
-Platform results will be recorded when the release checks finish.
+Windows: all 121 tests passed with none skipped in 279 seconds. After replacing a test expression with a standard locator assertion compatible with strict browser security, all 33 local interface and HTTP tests passed again in 158 seconds. Application security settings were not changed. Invented browser previews verified both the elapsed estimate label and the repeated-folder-label dialog.
+
+Mac: all 121 tests passed with none skipped on both Apple silicon and Intel. Linux unit checks also passed. [Successful workflow and tested source commit](https://github.com/davidjulian/canvas-quiz-log-exporter/actions/runs/40137805544). The Mac checks include the distributed installer and invented-data browser workflows. Native dialog and institution-managed installation limitations from the earlier platform validation still apply.
 
 ## Version 0.13.0 validation
 

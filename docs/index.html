@@ -15,7 +15,7 @@
 
   <section aria-labelledby="downloads">
     <h2 id="downloads">Downloads</h2>
-    <p>Version 0.13.0. Python 3.10 or newer and an installed copy of Google Chrome or Microsoft Edge are required. Safari cannot be used as the dedicated Canvas browser.</p>
+    <p>Version 0.13.1. Python 3.10 or newer and an installed copy of Google Chrome or Microsoft Edge are required. Safari cannot be used as the dedicated Canvas browser.</p>
     <ul>
       <li><a href="https://github.com/davidjulian/canvas-quiz-log-exporter/releases/latest/download/canvas-quick-capture.zip">Windows ZIP</a> — Windows 11 or later.</li>
       <li><a href="https://github.com/davidjulian/canvas-quiz-log-exporter/releases/latest/download/canvas-quiz-log-exporter-macos.zip">macOS ZIP</a> — macOS 14 (Sonoma) or later, Intel or Apple silicon.</li>
@@ -51,7 +51,7 @@
       <li>Return to the app, select <strong>I’m on Moderate — find logs</strong>, wait while the app scans the numbered student pages, then review the combined names and count and start collection. Do not change Canvas filters, sorting or page size after review.</li>
       <li>Compare the first downloaded log with Canvas, including its final event. In coded mode, also check the ID against the private name key using the button provided.</li>
       <li>Confirm the check to collect the remaining displayed logs. Leave the separate Canvas window alone during collection.</li>
-      <li>Use <strong>Open output folder</strong> to find the text files and export ZIP. If you selected <strong>Keep Canvas open for another quiz</strong>, open the next quiz in that window, change the folder label and select <strong>Use open Canvas for a new run</strong>. Otherwise Canvas closes after collection. Select <strong>Quit local app</strong> when finished.</li>
+      <li>Use <strong>Open output folder</strong> to find the text files and export ZIP. If you selected <strong>Keep Canvas open for another quiz</strong>, open the next quiz in that window, change the folder label and select <strong>Use open Canvas for a new run</strong>. Otherwise Canvas closes after collection. If the quiz/folder label is unchanged for a new run, choose <strong>Change label</strong> or explicitly confirm <strong>Use same label</strong> before continuing. Select <strong>Quit local app</strong> when finished.</li>
     </ol>
   </section>
 
@@ -67,7 +67,7 @@
   <section aria-labelledby="summary">
     <h2 id="summary">Local event summary</h2>
     <p>New collections produce a sortable table with student name, total elapsed time, the number of Stopped viewing events, average away time, total paired away time, percentage of elapsed time away and longest paired away period. The average uses only unambiguous Stopped viewing → Resumed pairs. Missing returns, consecutive stops and timestamp problems are flagged rather than assigned assumed durations. Total and longest away time use valid pairs only. Percentages are flagged when the attempt duration is unverified. Each attempt remains a separate row.</p>
-    <p>Elapsed time comes from a recognized submission event when available. Otherwise it is the last visible elapsed value and is flagged as not a verified total. Unloaded events can affect every measurement.</p>
+    <p>Elapsed time comes from a recognized submission event when available. Otherwise it uses a readable last timed event, labeled as an estimate. Earlier invalid timestamps do not discard that elapsed value, but can leave away durations unavailable. An unreadable final event or contradictory timing can still leave elapsed time unavailable. Elapsed time can include long breaks and does not measure active working time. Unloaded events can affect every measurement.</p>
     <p>The named CSV is saved at <code>private/event_summary.csv</code>, alongside calculation notes. It stays outside the sharing ZIP even in coded mode and requires protection as identified student data. Select <strong>Open named summary CSV</strong> after collection finishes or stops. Earlier exports are not imported.</p>
     <p>These are descriptive measurements, not a misconduct detector. They cannot identify another website or application or establish ChatGPT use. <a href="https://community.instructure.com/en/kb/articles/661091-unknown">Instructure advises against using quiz logs to validate academic integrity.</a></p>
   </section>
