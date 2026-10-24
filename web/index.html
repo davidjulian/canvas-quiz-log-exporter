@@ -57,13 +57,13 @@
       <p id="stage-description">Choose your Canvas address and output folder, then open Canvas to begin.</p>
       <div id="error" class="notice error" role="alert" hidden></div>
       <div id="local-error" class="notice error" role="alert" hidden></div>
-      <div id="update-note" class="notice" hidden>Updated app files are available. After your collection finishes, use Quit local app and reopen with the Start App launcher to enable the current features, including the local event summary.</div>
+      <div id="update-note" class="notice" hidden>Updated app files are available. After your collection finishes, use Quit local app and reopen with the Start App launcher to enable the current features, including collection across Moderate student pages.</div>
 
       <section id="welcome" class="welcome">
         <div class="document-icon" aria-hidden="true">≡</div>
         <h3>A local copy of each displayed log</h3>
         <p>The app downloads the displayed text from each View Log in order. Choose coded logs with a separate private name key, or named logs for an environment authorized for identified student records. A separate local table summarizes recorded focus events.</p>
-        <div class="scope-note"><strong>One Moderate page per run</strong><p>Display all intended students before starting. Student pagination, hidden attempts and additional event pages are not collected automatically.</p></div>
+        <div class="scope-note"><strong>Numbered Moderate pages are collected automatically</strong><p>The app scans the recognized student pages, combines the names for one review, then downloads the logs into one folder and summary. Your filters stay in effect. Hidden attempts and additional pages inside an event log are not collected.</p></div>
       </section>
 
       <section id="navigate" hidden>
@@ -72,7 +72,7 @@
       </section>
 
       <section id="review" hidden>
-        <div class="scope-note"><strong id="count-label"></strong><p>Check this count against Moderate. These are proposed names; correct any missing or incorrect names before starting. Repeated names can represent separate attempts.</p></div>
+        <div class="scope-note"><strong id="count-label"></strong><p>Check the combined list against the intended Moderate pages. Each position shows its source page. These are proposed names; correct any missing or incorrect names before starting. Repeated names can represent separate attempts. Do not change Canvas filters, sorting or page size after this review.</p></div>
         <div class="table-wrap"><table><thead><tr><th scope="col">Position</th><th scope="col">Student name from Moderate</th></tr></thead><tbody id="name-rows"></tbody></table></div>
         <label class="check-row"><input id="names-reviewed" type="checkbox"><span>I checked the names, count and intended attempts against Moderate.</span></label>
         <button id="start" class="primary" disabled>Start collection</button>
@@ -126,7 +126,7 @@
 </div>
 <dialog id="about-dialog" aria-labelledby="about-title">
   <div class="about-heading"><div><div class="eyebrow">ABOUT THIS APP</div><h2 id="about-title">Canvas Quiz Log Exporter</h2></div><button id="about-close" class="secondary" type="button" autofocus>Close</button></div>
-  <p>Download the displayed event text for each View Log on one Canvas New Quizzes Moderate page. The app runs on your computer and keeps the original event wording and elapsed times. A separate local table summarizes recorded focus events; it does not classify students or misconduct.</p>
+  <p>Download the displayed event text for each View Log across recognized Canvas New Quizzes Moderate student pages. The app runs on your computer and keeps the original event wording and elapsed times. A separate local table summarizes recorded focus events; it does not classify students or misconduct.</p>
   <p>The named summary is saved separately at <strong>private/event_summary.csv</strong>, with definitions at <strong>private/summary_method.txt</strong>. These files are not added to the log sharing ZIP. It summarizes only new downloads, including completed files from a stopped run; it does not import prior exports. Unreadable or ambiguous events are flagged, and summary failure does not stop the text downloads.</p>
   <h3>How it works</h3>
   <ol class="about-workflow"><li>Choose your Canvas address, local output folder and export mode.</li><li>Sign in to Canvas, open the completed quiz, and go to <strong>Build → Moderate</strong>.</li><li>Review the student names, then start. Check the first downloaded log against Canvas. In coded mode, also check its ID in the private name key.</li><li>Confirm the first log to download the remaining displayed logs. Find them in <strong>logs/</strong> and the ZIP for your selected mode.</li></ol>
@@ -138,7 +138,7 @@
   <p>Separating identifying records from reviewed coded logs may allow the coded output to be handled as <strong>Sensitive rather than Restricted data</strong>, where your institution’s classification and de-identification rules permit. This separation does not automatically change the classification or guarantee anonymization. The private key and original records must retain the protections required by your institution.</p>
   <p><strong>You are responsible for reviewing the output and following all applicable institutional privacy, data handling and FERPA rules.</strong> Nothing is automatically uploaded to AI or another service. Canvas still uses its normal institutional sign-in and connections.</p>
   <p>Use only services approved for the data’s resulting classification. Reviewed coded logs may be eligible for tools approved for Sensitive data when your institution permits; keep identifiable originals and the name key in an environment approved for their required classification.</p>
-  <p class="hint">One Moderate page per run. Hidden attempts, additional student or event pages, scrolling and collapsed details are not collected automatically. Focus events alone cannot establish misconduct.</p>
+  <p class="hint">Recognized numbered Moderate student pages are scanned automatically and combined for one name review and export. Current filters stay in effect. Hidden attempts, additional event pages, virtual lists and collapsed details are not collected automatically. Focus events alone cannot establish misconduct.</p>
   <p class="about-links"><a href="https://policy.ufl.edu/policy/data-classification-policy/" target="_blank" rel="noopener noreferrer">UF data classification policy</a> · <a href="https://studentprivacy.ed.gov/faq/what-constitutes-de-identified-records-and-information" target="_blank" rel="noopener noreferrer">FERPA de-identification guidance</a></p>
 </dialog>
 </body>

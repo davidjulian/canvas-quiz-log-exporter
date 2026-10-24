@@ -28,8 +28,9 @@ identifiers, dates or distinctive patterns can remain in free text. This app
 does not guarantee anonymization or certify FERPA compliance. No AI upload
 occurs automatically. Focus events alone cannot establish misconduct.
 
-Only rendered text is downloaded. Student pagination, hidden attempts, extra
-event pages, scrolling and collapsed details are not handled automatically.
+Only rendered text is downloaded. The local web app traverses recognized Moderate
+student pages with current filters retained. Hidden attempts, extra event pages,
+virtual lists and collapsed details are not handled automatically.
 """
 
 

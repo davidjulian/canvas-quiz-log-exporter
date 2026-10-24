@@ -22,6 +22,7 @@ from urllib.parse import urlsplit
 import quick_capture as capture
 from coded_export import CodedExport, NamedExport
 from event_summary import summarize_text, write_summary
+from moderate_pages import ModeratePages, moderate_fingerprint
 
 ROOT = Path(__file__).resolve().parent
 DEFAULT_URL = "https://ufl.instructure.com/"
@@ -42,6 +43,12 @@ ERRORS = {
     "PermissionError": "The app could not access a local folder or file. Check folder permissions and whether another program has the file open.",
     "browser_launch_failed": "The dedicated browser could not open. Close any earlier exporter window using this profile. Check that your selected browser is installed.",
     "archive_failed": "Text files were preserved, but the ZIP could not be completed. Check the output folder and available space.",
+    "moderate_pagination_not_recognized": "The Moderate page controls could not be read reliably. No further logs were opened. Keep completed files and report this error category without student data.",
+    "moderate_pagination_did_not_settle": "A Moderate page did not finish loading with a changed student list. Collection stopped instead of repeating the previous page. Completed files are preserved.",
+    "moderate_pagination_repeated": "A Moderate page or attempt appeared more than once. Collection stopped to avoid duplicate or mismatched logs. Completed files are preserved.",
+    "moderate_filters_changed": "The Moderate filters or quiz heading changed during the run. Collection stopped; completed files are preserved. Begin again with the intended filters.",
+    "moderate_pagination_changed": "The Moderate page sequence changed after review. Collection stopped; completed files are preserved. Begin again and review the current list.",
+    "moderate_pagination_limit": "The Moderate list exceeded this version’s safety limit of 1,000 pages or 5,000 log controls. Use a smaller filtered list.",
 }
 
 
@@ -131,6 +138,7 @@ class LocalApp:
                       "canvas_url": DEFAULT_URL, "output_base": "",
                       "keep_browser_open": False, "browser_open": False,
                       "summary_rows": [], "summary_ready": False, "summary_error": "",
+                      "pagination_supported": True, "current_page": 0, "page_count": 0, "discovered_logs": 0,
                       "default_browser": "chrome" if sys.platform == "darwin" else "msedge",
                       "error": "", "run_id": "", "version": capture.VERSION}
 
@@ -190,6 +198,7 @@ class LocalApp:
                 self.state.update(phase="opening", saved=0, total=0, names=[], output=str(out),
                                   first_file="", archive_ready=False, warning_count=0, error="",
                                   summary_rows=[], summary_ready=False, summary_error="",
+                                  current_page=0, page_count=0, discovered_logs=0,
                                   key_ready=False, export_mode=mode, folder_label=label,
                                   canvas_url=url, output_base=str(out.parent),
                                   keep_browser_open=keep_open, run_id=secrets.token_hex(8))
@@ -219,7 +228,7 @@ class LocalApp:
                     raise UIError("Check the name review box before starting.")
                 rows = payload.get("names")
                 if not isinstance(rows, list) or len(rows) != self.state["total"]:
-                    raise UIError("The name list does not match this Moderate page.")
+                    raise UIError("The name list does not match the reviewed Moderate pages.")
                 names = []
                 for index, row in enumerate(rows):
                     if (not isinstance(row, dict) or row.get("position") != index + 1
@@ -267,7 +276,8 @@ class LocalApp:
                             self.await_action("navigate")
                             def one_tab_only(_):
                                 raise capture.CaptureError("multiple_moderate_tabs")
-                            page = capture.choose_moderate_page(context, prompt=one_tab_only, check_cancel=self.check_cancel)
+                            page = capture.choose_moderate_page(context, prompt=one_tab_only, check_cancel=self.check_cancel,
+                                                                candidate_fingerprint=moderate_fingerprint)
                             collector = WebCapture(page, out, self, mode=mode)
                             collector.run()
                             self.check_cancel()
@@ -393,25 +403,84 @@ class WebCapture(capture.QuickCapture):
         self.run_out.mkdir(parents=True, exist_ok=False)
         self.record_ids = {}
         self.summary_rows = []
+        self.plans = []
         self.downloads = CodedExport(self.run_out) if mode == "coded" else NamedExport(self.run_out)
         super().__init__(page, self.run_out / "private", settle=settle, check_cancel=app.check_cancel, trim_menu=True)
         self.manifest["interface"] = "local_web_app"
         self.manifest["export_mode"] = mode
+        self.manifest.update(student_pagination_completed=False, moderate_pages=[])
+        self.manifest["scope"] = "View Log controls across the recognized Moderate student pages, with current filters retained"
+        self.manifest["limitations"] = "Rendered log text only; no hidden attempts, virtual rows, expansion or event pagination. Student page traversal is verified locally; whole-class completeness is not certified."
         self.manifest["text_cleanup"] = "Starts at Began; " + ("coded copies omit identifiers." if mode == "coded" else "names and original dates/times are retained.")
         self.manifest["privacy"] = ("Private records and name key are excluded from the coded downloads ZIP." if mode == "coded"
                                     else "Named downloads contain identified education records; no name key is created.")
         self.checkpoint()
 
     def prepare_names(self, controls, positions=None):
-        super().prepare_names(controls, positions)
+        if not self.plans:
+            super().prepare_names(controls, positions)
+        else:
+            self.proposed_names = {plan.offset + i: value for plan in self.plans
+                                   for i, value in enumerate(plan.names)}
         for index in self.proposed_names if self.mode == "coded" else ():
             while True:
                 record_id = "R-" + secrets.token_hex(8)
                 if record_id not in self.record_ids.values():
                     self.record_ids[index] = record_id
                     break
-        self.app.update(total=len(controls), names=[{"position": i + 1, "name": name}
-                        for i, (name, _) in self.proposed_names.items()])
+        pages = {plan.offset + i: plan.number for plan in self.plans for i in range(len(plan.signature))}
+        self.app.update(total=len(self.proposed_names), names=[{"position": i + 1, "name": name,
+                        "moderate_page": pages.get(i, 1)} for i, (name, _) in self.proposed_names.items()])
+
+    def run(self):
+        """Discover all names once, then capture the reviewed pages in order."""
+        navigator = ModeratePages(self.page, check_cancel=self.app.check_cancel, progress=self.app.update)
+        try:
+            self.plans = navigator.discover()
+            signature = tuple(item for plan in self.plans for item in plan.signature)
+            self.manifest.update(detected_controls=len(signature), student_pagination_completed=False,
+                                 moderate_pages=[{"page": p.number, "log_controls": len(p.signature),
+                                                  "first_position": p.offset + 1 if p.signature else None,
+                                                  "captured": False} for p in self.plans])
+            self.checkpoint()
+            self.app.update(page_count=len(self.plans), current_page=1)
+            self.prepare_names([])
+            if not self.confirm_start():
+                raise capture.CaptureError("not_started")
+            self.load_reviewed_names()
+            marker = self.get_readiness_phrase()
+            first = True
+            for plan in self.plans:
+                navigator.goto(plan.number)
+                navigator.verify(plan)
+                self.app.update(current_page=plan.number)
+                for local_index in range(len(plan.signature)):
+                    self.app.check_cancel()
+                    navigator.verify(plan)
+                    baseline = capture.page_text(self.page)
+                    if not marker or marker.casefold() in baseline.casefold():
+                        raise capture.CaptureError("readiness_phrase_is_empty_or_already_on_moderate")
+                    original_pages = self.open_control(local_index, plan.signature)
+                    text = capture.wait_log(self.page, marker, baseline, stable_seconds=self.settle,
+                                            check_cancel=self.app.check_cancel)
+                    if set(self.page.context.pages) != original_pages:
+                        raise capture.CaptureError("new_tab_navigation_not_supported")
+                    self.save(plan.offset + local_index, text, signature)
+                    if first:
+                        if not self.confirm_first_capture():
+                            raise capture.CaptureError("first_capture_not_confirmed")
+                        self.manifest["first_capture_locally_checked"] = True
+                        self.checkpoint()
+                        first = False
+                    navigator.restore_after_log(plan)
+                self.manifest["moderate_pages"][plan.number - 1]["captured"] = True
+                self.checkpoint()
+            self.manifest.update(page_loop_completed=True, student_pagination_completed=True)
+            self.checkpoint()
+        except BaseException as error:
+            self.manifest["error"] = str(error) if isinstance(error, capture.CaptureError) else type(error).__name__
+            self.checkpoint()
+            raise
 
     def confirm_start(self):
         _, payload = self.app.await_action("review")
@@ -436,11 +505,14 @@ class WebCapture(capture.QuickCapture):
     def write_name_key(self):
         temporary = self.out / "name_key.csv.tmp"
         with temporary.open("w", encoding="utf-8-sig", newline="") as handle:
-            writer = csv.DictWriter(handle, fieldnames=("record_id", "control_position", "student_name", "name_source"))
+            writer = csv.DictWriter(handle, fieldnames=("record_id", "control_position", "student_name", "name_source", "moderate_page", "position_on_page"))
             writer.writeheader()
             for index, (name, source) in sorted(self.names.items()):
+                plan = next((p for p in self.plans if p.offset <= index < p.offset + len(p.signature)), None)
                 writer.writerow({"record_id": self.record_ids[index], "control_position": index + 1,
-                                 "student_name": capture.csv_name(name), "name_source": source})
+                                 "student_name": capture.csv_name(name), "name_source": source,
+                                 "moderate_page": plan.number if plan else 1,
+                                 "position_on_page": index - plan.offset + 1 if plan else index + 1})
         temporary.replace(self.out / "name_key.csv")
         self.app.update(key_ready=True)
 
@@ -463,6 +535,9 @@ class WebCapture(capture.QuickCapture):
         self.app.check_cancel()
         super().save(index, text, signature)
         records = self.manifest["saved_logs"]
+        plan = next((p for p in self.plans if p.offset <= index < p.offset + len(p.signature)), None)
+        if plan:
+            records[-1].update(moderate_page=plan.number, position_on_page=index - plan.offset + 1)
         if self.mode == "coded":
             record_id = self.record_ids[index]
             records[-1]["record_id"] = record_id

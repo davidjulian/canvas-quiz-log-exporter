@@ -1,5 +1,15 @@
 # Validation
 
+Version 0.13.0, October 24, 2026.
+
+Student pagination: the web app discovers all recognized numbered Moderate pages before one combined name review, then captures the reviewed controls in page order. The first-log check remains once per run. The current filters and page size remain in effect. Both export modes use global positions, and coded IDs remain unique across pages. The private name key includes source page and row position; the private manifest includes per-page completion. Event pagination and hidden attempts remain unsupported.
+
+Invented-data tests cover 150 controls across three pages, starting on a later page, empty middle pages, number-only and mirrored pagers, public InstUI current-page markers with sliding windows and omitted disabled arrows, iframe navigation, Back resetting to page 1, conflicting controls, stale/repeated rows, changed filters and reviewed lists, limits, cancellation and later-page partial ZIP preservation. Full coded and named capture cases verify one name review, one first-log check, unique IDs/global positions, the combined private CSV and sharing ZIP exclusions. No live Canvas account, existing browser profile or student record is used. Actual institutional page layouts still require local verification; passing invented fixtures cannot certify whole-class or whole-event completeness.
+
+Windows and Mac results for this version are recorded after the release checks finish.
+
+## Version 0.12.0 validation
+
 Version 0.12.0, October 23, 2026.
 
 Windows: all 90 tests passed with none skipped in 100 seconds. The summary panel was also reviewed with invented records in the local browser, including sorting an added measure and viewing unmatched-event notes. The panel spans the page; narrow screens keep table overflow inside the table wrapper.

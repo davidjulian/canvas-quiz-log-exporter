@@ -1,10 +1,10 @@
 # Canvas Quiz Log Exporter
 
-A local Windows and macOS app for downloading the displayed event text from Canvas **New Quizzes**. It opens each **View Log** on one Moderate page, saves the text, and returns to the student list. It also creates a **local descriptive focus-event summary** for new downloads.
+A local Windows and macOS app for downloading the displayed event text from Canvas **New Quizzes**. It opens each **View Log** across recognized Moderate student pages, saves the text, and returns to the student list. It also creates a **local descriptive focus-event summary** for new downloads.
 
 [Downloads and setup website](https://davidjulian.github.io/canvas-quiz-log-exporter/) · [Release files](https://github.com/davidjulian/canvas-quiz-log-exporter/releases/latest)
 
-Version 0.12.0. Requires **Windows 11+ or macOS 14+ (Intel or Apple silicon), Python 3.10 or newer, and installed Microsoft Edge or Google Chrome**. The local interface can open in your usual browser, but the dedicated Canvas window must use Edge or Chrome; Safari is not supported for collection. This is a local Python app, not a standalone executable or a hosted Canvas service. It uses your own authorized instructor browser session; no Canvas API token is requested.
+Version 0.13.0. Requires **Windows 11+ or macOS 14+ (Intel or Apple silicon), Python 3.10 or newer, and installed Microsoft Edge or Google Chrome**. The local interface can open in your usual browser, but the dedicated Canvas window must use Edge or Chrome; Safari is not supported for collection. This is a local Python app, not a standalone executable or a hosted Canvas service. It uses your own authorized instructor browser session; no Canvas API token is requested.
 
 ## Install and open
 
@@ -49,12 +49,12 @@ Choosing a mode controls the file contents. It does not encrypt files, authorize
 
 1. Confirm the **Canvas URL**, defaulting to https://ufl.instructure.com/. Choose an existing output folder with **Browse** or paste a folder path. Optionally enter a **Quiz name or folder label**, then select the export mode. Each run creates a new folder inside the selected location. For example, `PCB3713C Exam 2` produces `PCB3713C_Exam_2-20261023-153000-a1b2c3`. A date, time and random suffix keep runs separate. Leave the label blank to use the original `quiz-logs-...` name. The label can be edited before each new run; it is fixed during collection. Characters unsuitable for filenames are replaced and long labels shortened. The label names the local run folder only; it is not inserted into coded log text or ZIP filenames/contents.
 2. Click **Open Canvas**. In the separate dedicated browser, sign in to Canvas and open your completed New Quiz, then go to **Build → Moderate**. Set any desired filters and students per page setting and wait for the student list to load. Keep only one Moderate list open in this browser.
-3. Return to the app and click **I'm on Moderate — find logs**. Check the displayed count and proposed student names against Moderate, correct names on screen, check the review box and click **Start collection**.
+3. Return to the app and click **I'm on Moderate — find logs**. The app scans the recognized numbered student pages, then returns to page 1. It can start from any numbered page. Review the combined count and proposed names across all discovered pages; the source page appears beside each sequential export position. Correct names on screen, check the review box and click **Start collection**. Leave Canvas alone during discovery. Do not change filters, sorting or page size after review.
 4. Check the first downloaded log against Canvas, including the final event and any need for more event pages, scrolling or expansion. In **coded mode**, the **Open private name key** button is available at this step so you can check the ID-to-name association. In **named mode**, check the student's name directly in the downloaded file; no key or ID confirmation is required.
 The first summary row is visible during this check. Compare its counts, paired periods and any notes with the original log before relying on later summary rows.
 
 5. If the first download is adequate, check the review box and click **Checked — collect remaining logs**. Otherwise use **Stop**. Leave the dedicated Canvas window alone while downloads run.
-6. Click **Open output folder** to see logs/ and the selected mode's ZIP. **Stop** preserves completed files and creates a partial ZIP where possible. It may wait for the current browser operation to finish. Every new run starts at the first displayed control; there is no skip or resume mode.
+6. Click **Open output folder** to see logs/ and the selected mode's ZIP. **Stop** preserves completed files and creates a partial ZIP where possible. It may wait for the current browser operation to finish. Every new web app run starts at page 1 and the first displayed log control; there is no skip or resume mode.
 7. Use **Quit local app** when finished. Closing or refreshing the web tab alone does not stop a run.
 
 ### Collect another quiz in the same Canvas window
@@ -103,7 +103,11 @@ The dedicated browser profile stays in `%LOCALAPPDATA%\CanvasQuizExporter\Browse
 
 ## Scope
 
-One run processes **only the View Log controls currently displayed on one Moderate page**. It does not advance student pagination, reveal hidden attempts, scroll virtual lists, expand details or load additional event pages. A first-file check does not prove every later capture is complete. The private manifest leaves whole-student and whole-event completeness unverified. Only rendered text from the single Began line onward is downloaded; surrounding Canvas navigation is removed.
+One web app run scans **all recognized numbered Moderate student pages**, keeps current filters and page size, and processes their reviewed View Log controls in page order. Discovery opens no logs. It returns to page 1 for one combined name review; the first downloaded log is checked once as before. Files, IDs and summary positions remain unique across pages in one output folder, ZIP and summary. The private manifest records each page's control count and completion state. The coded name key also records source page and position on that page.
+
+Pagination uses accessible page numbers, current-page markers and Next/Previous controls in the same document as the Moderate list, including Canvas iframes. It waits for a stable page number and changed rows, detects repeated control identities, checks reviewed rows before every capture, and restores the reviewed page if Back resets the list to page 1. Empty recognized pages do not end traversal. Ambiguous controls, changed filters/list order or an unresponsive page stop collection and preserve completed files. The limits are 1,000 recognized pages and 5,000 log controls per run; larger lists need smaller filters. A single-page list needs no pagination controls.
+
+This does not remove filters or load students excluded by them. It does not reveal hidden attempts, scroll virtual lists, expand details or load additional pages **inside an event log**. The legacy command line collector still processes one displayed Moderate page; automatic student pagination applies to the local web app. A first-file check does not prove every later capture is complete. The private manifest leaves whole-student and whole-event completeness unverified. Only rendered text from the single Began line onward is downloaded; surrounding Canvas navigation is removed.
 
 Original event wording and relative elapsed times are retained in the downloaded logs. The separate summary calculates descriptive focus-event counts and paired durations. There is no misconduct scoring, automatic outlier classification or inference about another website or application. Page focus events alone cannot establish LLM use or misconduct. The app targets English New Quizzes layouts and same-tab View Log navigation. Other layouts may need adaptation.
 

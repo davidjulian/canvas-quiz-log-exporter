@@ -299,7 +299,7 @@ class BrowserUITests(HTTPTests):
         self.assertTrue(self.page.locator("#launch").is_disabled())
         self.assertFalse(self.page.locator("#quit").is_disabled())
 
-    def launch_synthetic(self, mode="coded", label="", keep_open=False):
+    def launch_synthetic(self, mode="coded", label="", keep_open=False, fixture=FIXTURE):
         from playwright.sync_api import BrowserType
         original = BrowserType.launch_persistent_context
         self.synthetic_launches = 0
@@ -310,7 +310,7 @@ class BrowserUITests(HTTPTests):
             def closed(_):
                 self.synthetic_closes += 1
             context.on("close", closed)
-            context.route("**/*", lambda route: route.fulfill(status=200, content_type="text/html", body=FIXTURE)
+            context.route("**/*", lambda route: route.fulfill(status=200, content_type="text/html", body=fixture)
                           if route.request.url.split('#')[0] == "https://canvas-fixture.invalid/" else route.abort())
             return context
         self.launch_patch = patch.object(BrowserType, "launch_persistent_context", launch)
@@ -335,6 +335,25 @@ class BrowserUITests(HTTPTests):
         self.page.locator("#moderate").click()
         self.page.locator("#name-rows input").nth(2).wait_for()
         self.assert_phase("review")
+
+    def test_paginated_ui_reviews_all_pages_once_and_downloads_combined_summary(self):
+        from test_moderate_pages import FIXTURE as PAGINATED_FIXTURE
+        self.launch_synthetic(fixture=PAGINATED_FIXTURE)
+        self.assertEqual(self.page.locator("#name-rows input").count(), 6)
+        self.assertIn("6 View Log controls found across 3 Moderate pages", self.page.locator("#count-label").inner_text())
+        self.assertIn("Page 3", self.page.locator("#name-rows tr").last.inner_text())
+        self.page.locator("#names-reviewed").check()
+        self.page.locator("#start").click()
+        self.page.locator("#open-first").wait_for(state="visible", timeout=30000)
+        self.assert_phase("checking")
+        self.page.locator("#first-reviewed").check()
+        self.page.locator("#checked").click()
+        self.assert_phase("complete", timeout=60000)
+        state = self.app.snapshot()
+        self.assertEqual((state["saved"], state["total"], state["page_count"]), (6, 6, 3))
+        self.assertEqual(self.page.locator("#summary-rows tr").count(), 6)
+        self.assertIn("6 of 6 reviewed logs saved across 3 Moderate pages", self.page.locator("#result-description").inner_text())
+        self.assertEqual(len(list((Path(state["output"]) / "logs").glob("log_*.txt"))), 6)
 
     def test_entire_web_workflow_coded_files_and_private_key(self):
         self.launch_synthetic(label="Synthetic quiz label", keep_open=True)

@@ -18,7 +18,7 @@ from urllib.parse import urlsplit
 
 VIEW_LOG = re.compile(r"view\s+log", re.I)
 VIEW_LOG_PREFIX = re.compile(r"^view\s+log\b", re.I)
-VERSION = "0.12.0"
+VERSION = "0.13.0"
 
 
 class CaptureError(Exception):
@@ -161,12 +161,9 @@ def visible_frame(frame):
     return True
 
 
-def controls_on_page(page):
-    """Match View Log accessible names, then hash local identity context."""
-    matches = []
-    for frame in page.frames:
-        if not visible_frame(frame):
-            continue
+def controls_in_frame(frame):
+    """Return local controls and identity hashes from one visible document."""
+    if visible_frame(frame):
         controls, signatures = [], []
         # Match computed accessible names, including aria-labelledby and labels
         # such as 'View Log for <student>'. These were present in the instructor's
@@ -193,8 +190,17 @@ def controls_on_page(page):
                                   "context": element_text(row) if row.count() else text}, sort_keys=True)
             controls.append(item)
             signatures.append(digest(context))
+        return controls, tuple(signatures)
+    return [], ()
+
+
+def controls_on_page(page):
+    """Match View Log accessible names, then hash local identity context."""
+    matches = []
+    for frame in page.frames:
+        controls, signatures = controls_in_frame(frame)
         if controls:
-            matches.append((controls, tuple(signatures)))
+            matches.append((controls, signatures))
     if not matches:
         raise CaptureError("no_view_log_controls_found")
     if len(matches) > 1:
@@ -259,7 +265,8 @@ def diagnostic_report(context):
     return report
 
 
-def choose_moderate_page(context, prompt=input, timeout=45, stable_seconds=1, check_cancel=lambda: None):
+def choose_moderate_page(context, prompt=input, timeout=45, stable_seconds=1, check_cancel=lambda: None,
+                         candidate_fingerprint=None):
     # The first Enter can coincide with a navigation or React rendering. Require
     # a nonempty matching list to remain identical across repeated observations.
     candidates, previous, stable_since = [], None, None
@@ -272,8 +279,12 @@ def choose_moderate_page(context, prompt=input, timeout=45, stable_seconds=1, ch
             try:
                 if not page.locator("body").count() or visibly_busy(page):
                     continue
-                controls, signature = controls_on_page(page)
-                observed.append((number, page, len(controls)))
+                if candidate_fingerprint:
+                    count, signature = candidate_fingerprint(page)
+                else:
+                    controls, signature = controls_on_page(page)
+                    count = len(controls)
+                observed.append((number, page, count))
                 fingerprint.append((number, signature))
             except Exception:
                 continue

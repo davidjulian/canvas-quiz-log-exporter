@@ -19,13 +19,13 @@
     idle: ["Ready when you are", "Choose your Canvas address and output folder, then open Canvas to begin.", "Not started"],
     opening: ["Opening your Canvas browser", "A dedicated window will open. Your sign-in stays in that browser.", "Opening"],
     navigate: ["Open your quiz’s Moderate page", "Use the separate Canvas window, then return here to find the logs.", "Your turn"],
-    finding: ["Finding the displayed logs", "Waiting for the Moderate list to load and stay stable.", "Finding logs"],
+    finding: ["Finding logs across Moderate pages", "The app scans the recognized student pages, keeps your filters and returns to page 1 for review. Leave Canvas alone while it works.", "Finding logs"],
     review: ["Review the student names", "Confirm who each View Log belongs to before collection begins.", "Your turn"],
     capturing: ["Collecting your logs", "The app is opening logs in their displayed order and saving each one locally.", "Collecting"],
     checking: ["Check the first downloaded log", "Collection is paused while you check the private name key and downloaded text.", "Your turn"],
     finishing: ["Finishing your local export", "Preserving the text files and creating the export ZIP.", "Finishing"],
     stopping: ["Stopping collection", "Waiting for the current browser operation to end. Completed files will be preserved.", "Stopping"],
-    complete: ["Collection finished", "The displayed View Log controls have been processed.", "Finished"],
+    complete: ["Collection finished", "The reviewed View Log controls across the recognized Moderate pages have been processed.", "Finished"],
     stopped: ["Collection stopped", "Any completed files remain in your output folder. A new run starts from the first student.", "Stopped"],
     error: ["Collection needs attention", "Any completed files are preserved. Check the message below before starting a new run.", "Needs attention"]
   };
@@ -121,7 +121,7 @@
     $("error").textContent = state.error || "";
     show("error", !!state.error);
     for (const id of ["canvas-url", "output", "folder-label", "keep-canvas-open", "browse", "browser", "launch"]) $(id).disabled = active || busy;
-    const supportsRunOptions = typeof state.folder_label === "string" && typeof state.keep_browser_open === "boolean" && Array.isArray(state.summary_rows);
+    const supportsRunOptions = typeof state.folder_label === "string" && typeof state.keep_browser_open === "boolean" && Array.isArray(state.summary_rows) && state.pagination_supported === true;
     show("update-note", !supportsRunOptions);
     if (!supportsRunOptions) for (const id of ["launch", "folder-label", "keep-canvas-open"]) $(id).disabled = true;
     $("launch").textContent = phase === "idle" ? "Open Canvas" : state.browser_open ? "Use open Canvas for a new run" : "Open Canvas for a new run";
@@ -156,6 +156,9 @@
         const tr = document.createElement("tr");
         const position = document.createElement("td");
         position.textContent = row.position;
+        const pageLabel = document.createElement("small");
+        pageLabel.className = "hint"; pageLabel.textContent = `Page ${row.moderate_page || 1}`;
+        position.append(document.createElement("br"), pageLabel);
         const cell = document.createElement("td");
         const input = document.createElement("input");
         input.type = "text"; input.value = row.name; input.maxLength = 200;
@@ -164,7 +167,7 @@
         input.setAttribute("aria-label", `Student name at position ${row.position}`);
         cell.append(input); tr.append(position, cell); $("name-rows").append(tr);
       }
-      $("count-label").textContent = `${state.total} View Log controls found on this Moderate page`;
+      $("count-label").textContent = `${state.total} View Log controls found across ${state.page_count || 1} Moderate page${state.page_count === 1 ? "" : "s"}`;
     }
     if (phase === "checking" && renderedCheck !== state.run_id) {
       renderedCheck = state.run_id;
@@ -177,13 +180,13 @@
     $("percent").textContent = `${percent}%`;
     $("progress").max = state.total || 1;
     $("progress").value = state.saved;
-    $("progress-note").textContent = active ? "Please leave the dedicated Canvas window alone while collection runs." : "Files remain in the output folder below.";
+    $("progress-note").textContent = active ? `Moderate page ${state.current_page || 1} of ${state.page_count || 1}. Please leave the dedicated Canvas window alone while collection runs.` : "Files remain in the output folder below.";
     $("output-path").textContent = state.output;
     $("archive-note").textContent = named
       ? (state.archive_ready ? "named-logs.zip contains student names and original dates, times and event text. No key was created." : "Named downloads are in logs/. No student coding or name key is used.")
       : (state.archive_ready ? "coded-logs.zip contains the downloaded text files. The private name key is excluded." : "Downloaded text is in logs/. The name key and full captures stay in private/.");
     $("output-privacy").textContent = named ? "These downloads contain identified student records. Use only storage and services authorized for their required classification and follow institutional privacy and FERPA rules." : "Keep private/ and name_key.csv private. Review coded files before sharing: identifying details can remain. This app does not certify FERPA compliance.";
-    $("result-description").textContent = `${state.saved} of ${state.total} displayed logs saved. ${state.archive_ready ? "Your download ZIP is ready." : "Check the output folder for completed files."}${state.browser_open ? " Canvas remains open. Open another quiz and go to Build → Moderate, update the folder label, then select Use open Canvas for a new run." : ""}`;
+    $("result-description").textContent = `${state.saved} of ${state.total} reviewed logs saved across ${state.page_count || 1} Moderate page${state.page_count === 1 ? "" : "s"}. ${state.archive_ready ? "Your download ZIP is ready." : "Check the output folder for completed files."}${state.browser_open ? " Canvas remains open. Open another quiz and go to Build → Moderate, update the folder label, then select Use open Canvas for a new run." : ""}`;
     show("open-key", !!state.key_ready);
     show("duplicates", state.warning_count > 0);
     const rows = state.summary_rows || [];
@@ -192,7 +195,7 @@
     $("open-summary").disabled = !state.summary_ready || busy || active;
     $("summary-error").textContent = state.summary_error || "";
     show("summary-error", !!state.summary_error);
-    $("activity").textContent = active ? (phase === "checking" || phase === "review" || phase === "navigate" ? "Waiting for your next step." : "Local collection is running.") : "No collection is running.";
+    $("activity").textContent = phase === "finding" && state.current_page ? `Scanning Moderate page ${state.current_page}; ${state.discovered_logs || 0} log controls found so far.` : active ? (phase === "checking" || phase === "review" || phase === "navigate" ? "Waiting for your next step." : "Local collection is running.") : "No collection is running.";
   }
   async function refresh() {
     render(await api("/api/state"));
