@@ -10,12 +10,12 @@
 <body>
 <main>
   <h1>Canvas Quiz Log Exporter</h1>
-  <p>A free local tool for instructors to download the displayed event text from Canvas New Quizzes logs. It collects logs from one Moderate page at a time and performs no analysis.</p>
+  <p>A free local tool for instructors to download the displayed event text from Canvas New Quizzes logs. It collects logs from one Moderate page at a time and produces a local descriptive focus-event summary.</p>
   <p>This website provides software downloads and instructions. The app runs locally on your computer; student records are not uploaded to this website or GitHub.</p>
 
   <section aria-labelledby="downloads">
     <h2 id="downloads">Downloads</h2>
-    <p>Version 0.11.0. Python 3.10 or newer and an installed copy of Google Chrome or Microsoft Edge are required. Safari cannot be used as the dedicated Canvas browser.</p>
+    <p>Version 0.12.0. Python 3.10 or newer and an installed copy of Google Chrome or Microsoft Edge are required. Safari cannot be used as the dedicated Canvas browser.</p>
     <ul>
       <li><a href="https://github.com/davidjulian/canvas-quiz-log-exporter/releases/latest/download/canvas-quick-capture.zip">Windows ZIP</a> — Windows 11 or later.</li>
       <li><a href="https://github.com/davidjulian/canvas-quiz-log-exporter/releases/latest/download/canvas-quiz-log-exporter-macos.zip">macOS ZIP</a> — macOS 14 (Sonoma) or later, Intel or Apple silicon.</li>
@@ -62,6 +62,14 @@
     <p>The separate <code>private/name_key.csv</code> maps IDs to names. The <code>private/</code> folder also contains original captures. These files are excluded from <code>coded-logs.zip</code>. Other identifying details may remain in coded text, so review it before sharing.</p>
     <h3>Named logs</h3>
     <p>Files retain student names, original dates, times and event text. This mode creates no coded IDs or private name key and requires no ID/key confirmation. Use only environments authorized for identified education records.</p>
+  </section>
+
+  <section aria-labelledby="summary">
+    <h2 id="summary">Local event summary</h2>
+    <p>New collections produce a sortable table with student name, total elapsed time, the number of Stopped viewing events, average away time, total paired away time, percentage of elapsed time away and longest paired away period. The average uses only unambiguous Stopped viewing → Resumed pairs. Missing returns, consecutive stops and timestamp problems are flagged rather than assigned assumed durations. Total and longest away time use valid pairs only. Percentages are flagged when the attempt duration is unverified. Each attempt remains a separate row.</p>
+    <p>Elapsed time comes from a recognized submission event when available. Otherwise it is the last visible elapsed value and is flagged as not a verified total. Unloaded events can affect every measurement.</p>
+    <p>The named CSV is saved at <code>private/event_summary.csv</code>, alongside calculation notes. It stays outside the sharing ZIP even in coded mode and requires protection as identified student data. Select <strong>Open named summary CSV</strong> after collection finishes or stops. Earlier exports are not imported.</p>
+    <p>These are descriptive measurements, not a misconduct detector. They cannot identify another website or application or establish ChatGPT use. <a href="https://community.instructure.com/en/kb/articles/661091-unknown">Instructure advises against using quiz logs to validate academic integrity.</a></p>
   </section>
 
   <section aria-labelledby="privacy">

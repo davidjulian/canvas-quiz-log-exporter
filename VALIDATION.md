@@ -2,6 +2,10 @@
 
 Version 0.12.0, October 23, 2026.
 
+Windows: all 90 tests passed with none skipped in 100 seconds. The summary panel was also reviewed with invented records in the local browser, including sorting an added measure and viewing unmatched-event notes. The panel spans the page; narrow screens keep table overflow inside the table wrapper.
+
+Mac verification: all 90 tests passed with none skipped on Intel and Apple silicon. Linux unit checks also passed. [Successful workflow and tested source commit](https://github.com/davidjulian/canvas-quiz-log-exporter/actions/runs/40044880187).
+
 New local summary: one row per new downloaded attempt, with reviewed name, elapsed time, stop count, mean and total duration of unambiguous stop/return pairs, percentage of displayed elapsed time away, and longest valid paired period. Tests independently verify totals, maxima, the percentage denominator, rounding, zero versus unavailable values, provisional percentages and the treatment of unknown periods. It supports MM:SS and HH:MM:SS, inline and split rows, blank lines, and both documented stop wording variants. Tests cover no away events versus zero-second pairs, unmatched and duplicate stops, consecutive stop clusters, orphan returns, reverse/mixed ordering, invalid clocks, missing/conflicting submission and post-submission events. Missing values remain unknown. The source and test cases are inspectable in event_summary.py and tests/test_event_summary.py.
 
 CSV tests verify formula-safe student names and blank unavailable values. Browser workflow tests verify table values and sorting, the private named CSV in both export modes, its exclusion from sharing ZIPs, native opening of the fixed summary path, and text/ZIP preservation when both parsing and summary writing fail. Earlier extraction, privacy and browser reuse checks remain in the suite. Only newly collected text is summarized.

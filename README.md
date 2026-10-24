@@ -51,6 +51,8 @@ Choosing a mode controls the file contents. It does not encrypt files, authorize
 2. Click **Open Canvas**. In the separate dedicated browser, sign in to Canvas and open your completed New Quiz, then go to **Build → Moderate**. Set any desired filters and students per page setting and wait for the student list to load. Keep only one Moderate list open in this browser.
 3. Return to the app and click **I'm on Moderate — find logs**. Check the displayed count and proposed student names against Moderate, correct names on screen, check the review box and click **Start collection**.
 4. Check the first downloaded log against Canvas, including the final event and any need for more event pages, scrolling or expansion. In **coded mode**, the **Open private name key** button is available at this step so you can check the ID-to-name association. In **named mode**, check the student's name directly in the downloaded file; no key or ID confirmation is required.
+The first summary row is visible during this check. Compare its counts, paired periods and any notes with the original log before relying on later summary rows.
+
 5. If the first download is adequate, check the review box and click **Checked — collect remaining logs**. Otherwise use **Stop**. Leave the dedicated Canvas window alone while downloads run.
 6. Click **Open output folder** to see logs/ and the selected mode's ZIP. **Stop** preserves completed files and creates a partial ZIP where possible. It may wait for the current browser operation to finish. Every new run starts at the first displayed control; there is no skip or resume mode.
 7. Use **Quit local app** when finished. Closing or refreshing the web tab alone does not stop a run.
