@@ -57,7 +57,7 @@
       <p id="stage-description">Choose your Canvas address and output folder, then open Canvas to begin.</p>
       <div id="error" class="notice error" role="alert" hidden></div>
       <div id="local-error" class="notice error" role="alert" hidden></div>
-      <div id="update-note" class="notice" hidden>Updated app files are available. After your collection finishes, use Quit local app and reopen with the Start App launcher to enable the current features, including collection across Moderate student pages.</div>
+      <div id="update-note" class="notice" hidden>Updated app files are available. After your collection finishes, use Quit local app and reopen with the Start App launcher to enable the current features, including the folder label warning and latest elapsed time repair.</div>
 
       <section id="welcome" class="welcome">
         <div class="document-icon" aria-hidden="true">≡</div>
@@ -124,6 +124,12 @@
       </section>
   <footer class="page-footer"><p>Local log downloads and descriptive focus-event summaries.<br>Page focus events alone cannot establish LLM use or misconduct.</p><button id="quit" class="text-button">Quit local app</button></footer>
 </div>
+<dialog id="label-warning-dialog" aria-labelledby="label-warning-title" aria-describedby="label-warning-help">
+  <h2 id="label-warning-title">The quiz folder label hasn’t changed</h2>
+  <p>You used <strong id="previous-folder-label"></strong> for your previous run.</p>
+  <p id="label-warning-help">If you are collecting a different quiz, change the label before continuing. You can also choose to reuse it. Each run still creates a separate output folder.</p>
+  <div class="label-warning-actions"><button id="change-folder-label" class="primary" type="button" autofocus>Change label</button><button id="reuse-folder-label" class="secondary" type="button">Use same label</button></div>
+</dialog>
 <dialog id="about-dialog" aria-labelledby="about-title">
   <div class="about-heading"><div><div class="eyebrow">ABOUT THIS APP</div><h2 id="about-title">Canvas Quiz Log Exporter</h2></div><button id="about-close" class="secondary" type="button" autofocus>Close</button></div>
   <p>Download the displayed event text for each View Log across recognized Canvas New Quizzes Moderate student pages. The app runs on your computer and keeps the original event wording and elapsed times. A separate local table summarizes recorded focus events; it does not classify students or misconduct.</p>

@@ -112,6 +112,43 @@ class LocalLogicTests(unittest.TestCase):
         with self.assertRaisesRegex(web.UIError, "closing"):
             app.command("launch", {})
 
+    def test_unchanged_label_requires_confirmation_before_starting_any_new_run(self):
+        with tempfile.TemporaryDirectory() as temp:
+            approved = Path(temp) / "approved"
+            approved.mkdir()
+            for old, new in (("Exam 2", "Exam 2"), ("Exam 2", "  EXAM   2  "), ("", "  ")):
+                with self.subTest(old=old, new=new):
+                    app = web.LocalApp(profile=Path(temp) / "profile")
+                    app.update(phase="complete", run_id="previous", folder_label=old)
+                    with self.assertRaisesRegex(web.UIError, "unchanged"):
+                        app.command("launch", {"url": web.DEFAULT_URL, "output": str(approved), "folder_label": new})
+                    self.assertEqual(app.snapshot()["run_id"], "previous")
+                    self.assertEqual(app.snapshot()["phase"], "complete")
+                    self.assertIsNone(app.worker)
+                    self.assertEqual(list(approved.iterdir()), [])
+
+    def test_confirmed_label_reuse_keeps_browser_worker_and_rejects_stale_confirmation(self):
+        with tempfile.TemporaryDirectory() as temp:
+            approved = Path(temp) / "approved"
+            approved.mkdir()
+            app = web.LocalApp(profile=Path(temp) / "profile")
+            worker = MagicMock()
+            worker.is_alive.return_value = True
+            app.worker = worker
+            app.update(phase="complete", run_id="previous", folder_label="Exam 2", browser_open=True)
+            payload = {"url": web.DEFAULT_URL, "output": str(approved), "folder_label": "Exam 2", "keep_browser_open": True}
+            with self.assertRaisesRegex(web.UIError, "unchanged"):
+                app.command("launch", dict(payload, reuse_label_run_id="older-run"))
+            self.assertIs(app.worker, worker)
+            self.assertEqual(app.snapshot()["phase"], "complete")
+            self.assertTrue(app.snapshot()["browser_open"])
+            self.assertFalse(app.stop_event.is_set())
+            app.command("launch", dict(payload, reuse_label_run_id="previous"))
+            self.assertIs(app.worker, worker)
+            self.assertIsNotNone(app.next_run)
+            self.assertEqual(app.snapshot()["phase"], "opening")
+            self.assertNotEqual(app.snapshot()["run_id"], "previous")
+
     def test_summary_opens_only_the_fixed_private_csv_after_capture_stops(self):
         with tempfile.TemporaryDirectory() as temp:
             out = Path(temp)
@@ -293,11 +330,72 @@ class BrowserUITests(HTTPTests):
         self.assertEqual(self.app.snapshot()["phase"], phase)
 
     def test_updated_assets_request_restart_for_an_older_running_app(self):
-        self.app.state.pop("summary_rows")
+        for key in ("summary_rows", "label_warning_supported"):
+            with self.subTest(key=key):
+                previous = self.app.state.pop(key)
+                self.page.reload()
+                self.page.locator("#update-note").wait_for(state="visible")
+                self.assertTrue(self.page.locator("#launch").is_disabled())
+                self.assertFalse(self.page.locator("#quit").is_disabled())
+                self.app.state[key] = previous
+
+    def test_unchanged_label_dialog_defers_launch_and_allows_edit_or_explicit_reuse(self):
+        self.app.update(phase="complete", run_id="previous", folder_label="Exam 2",
+                        output_base=str(self.output), browser_open=True)
         self.page.reload()
-        self.page.locator("#update-note").wait_for(state="visible")
-        self.assertTrue(self.page.locator("#launch").is_disabled())
-        self.assertFalse(self.page.locator("#quit").is_disabled())
+        self.page.get_by_role("button", name="Use open Canvas for a new run").wait_for()
+        self.page.locator("#folder-label").fill("  EXAM   2  ")
+        with patch.object(self.app, "command", return_value={}) as launch:
+            self.page.locator("#launch").click()
+            dialog = self.page.get_by_role("dialog", name="The quiz folder label hasn’t changed")
+            self.assertTrue(dialog.is_visible())
+            self.assertEqual(self.page.locator("#previous-folder-label").inner_text(), "Exam 2")
+            launch.assert_not_called()
+            self.assertEqual(self.app.snapshot()["run_id"], "previous")
+            self.page.locator("#change-folder-label").click()
+            self.assertFalse(dialog.is_visible())
+            self.assertTrue(self.page.locator("#folder-label").evaluate("e => e === document.activeElement"))
+            launch.assert_not_called()
+            self.page.locator("#folder-label").fill("Exam 3")
+            self.page.locator("#launch").click()
+            self.wait_for_command(launch)
+            self.assertEqual(launch.call_args.args[1]["folder_label"], "Exam 3")
+            self.assertEqual(launch.call_args.args[1]["reuse_label_run_id"], "")
+            launch.reset_mock()
+            self.page.locator("#folder-label").fill("Exam 2")
+            self.page.locator("#launch").click()
+            self.assertTrue(dialog.is_visible())
+            self.page.keyboard.press("Escape")
+            self.assertFalse(dialog.is_visible())
+            launch.assert_not_called()
+            self.page.locator("#launch").click()
+            self.page.locator("#reuse-folder-label").click()
+            self.wait_for_command(launch)
+            self.assertEqual(launch.call_args.args[1]["reuse_label_run_id"], "previous")
+            self.assertFalse(dialog.is_visible())
+
+    def wait_for_command(self, command):
+        deadline = time.monotonic() + 5
+        while not command.called and time.monotonic() < deadline:
+            self.page.wait_for_timeout(50)
+        self.assertTrue(command.called)
+        self.page.wait_for_function("!document.getElementById('launch').disabled")
+
+    def test_blank_label_warning_and_literal_label_text_fit_small_screens(self):
+        self.app.update(phase="complete", run_id="previous", folder_label="", output_base=str(self.output))
+        self.page.reload()
+        self.page.get_by_role("button", name="Open Canvas for a new run").wait_for()
+        self.page.locator("#launch").click()
+        self.assertEqual(self.page.locator("#previous-folder-label").inner_text(), "(no quiz label)")
+        self.page.keyboard.press("Escape")
+        self.app.update(run_id="next-previous", folder_label='<img src="https://private.invalid/">')
+        self.page.reload()
+        self.page.get_by_role("button", name="Open Canvas for a new run").wait_for()
+        self.page.set_viewport_size({"width": 390, "height": 844})
+        self.page.locator("#launch").click()
+        self.assertEqual(self.page.locator("#previous-folder-label img").count(), 0)
+        self.assertIn("<img", self.page.locator("#previous-folder-label").inner_text())
+        self.assertFalse(self.page.evaluate("document.documentElement.scrollWidth > innerWidth"))
 
     def launch_synthetic(self, mode="coded", label="", keep_open=False, fixture=FIXTURE):
         from playwright.sync_api import BrowserType

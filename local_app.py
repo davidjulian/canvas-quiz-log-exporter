@@ -139,6 +139,7 @@ class LocalApp:
                       "keep_browser_open": False, "browser_open": False,
                       "summary_rows": [], "summary_ready": False, "summary_error": "",
                       "pagination_supported": True, "current_page": 0, "page_count": 0, "discovered_logs": 0,
+                      "label_warning_supported": True,
                       "default_browser": "chrome" if sys.platform == "darwin" else "msedge",
                       "error": "", "run_id": "", "version": capture.VERSION}
 
@@ -193,6 +194,11 @@ class LocalApp:
                 if not isinstance(keep_open, bool):
                     raise UIError("Choose whether to keep Canvas open after collection.")
                 label = payload.get("folder_label", "")
+                folder_label(label)  # Validate before comparing or starting a new run.
+                repeated_label = bool(self.state["run_id"] and
+                                      " ".join(label.split()).lower() == " ".join(self.state["folder_label"].split()).lower())
+                if repeated_label and payload.get("reuse_label_run_id") != self.state["run_id"]:
+                    raise UIError("The quiz name or folder label is unchanged. Change it for the new quiz, or confirm Use same label in the warning.")
                 out = output_folder(payload.get("output"), self.profile, label)
                 self.stop_event.clear()
                 self.state.update(phase="opening", saved=0, total=0, names=[], output=str(out),

@@ -6,6 +6,8 @@ Elapsed-time fallback repair: a readable submission event or last timed event is
 
 Invented regression cases cover invalid earlier and final clocks, a readable submission after an invalid row, reversed rows with an unreadable latest event, a long lab-like timeline without submission, and stop-count preservation. The local interface workflow checks the estimated time label, named CSV values, blank unavailable away durations and preservation of original downloads and partial ZIPs. A user-supplied redacted lab log was checked locally using only generic layout flags and availability booleans; its event values and text were not copied into the software or test fixtures.
 
+Folder label warning: a new run with the same label (including case/whitespace-only changes or another blank label) requires Change label or explicit Use same label. The confirmation is tied to the previous run ID, so a stale confirmation is rejected. The warning does not open, close or navigate Canvas and does not start another collection. Tests cover first-run behavior, blocking before worker/file changes, retained-browser reuse after confirmation, changing the label, Escape cancellation, literal label rendering, blank labels, mobile layout and restart notices for older app processes.
+
 Platform results will be recorded when the release checks finish.
 
 ## Version 0.13.0 validation

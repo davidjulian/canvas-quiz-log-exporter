@@ -12,6 +12,7 @@
   let labelRun = "";
   let summaryKey = "";
   let summarySort = {key: "position", desc: false};
+  let labelWarningRun = "";
   $("about-open").addEventListener("click", () => $("about-dialog").showModal());
   $("about-close").addEventListener("click", () => $("about-dialog").close());
   const terminal = new Set(["idle", "complete", "stopped", "error"]);
@@ -127,7 +128,7 @@
     $("error").textContent = state.error || "";
     show("error", !!state.error);
     for (const id of ["canvas-url", "output", "folder-label", "keep-canvas-open", "browse", "browser", "launch"]) $(id).disabled = active || busy;
-    const supportsRunOptions = typeof state.folder_label === "string" && typeof state.keep_browser_open === "boolean" && Array.isArray(state.summary_rows) && state.pagination_supported === true;
+    const supportsRunOptions = typeof state.folder_label === "string" && typeof state.keep_browser_open === "boolean" && Array.isArray(state.summary_rows) && state.pagination_supported === true && state.label_warning_supported === true;
     show("update-note", !supportsRunOptions);
     if (!supportsRunOptions) for (const id of ["launch", "folder-label", "keep-canvas-open"]) $(id).disabled = true;
     $("launch").textContent = phase === "idle" ? "Open Canvas" : state.browser_open ? "Use open Canvas for a new run" : "Open Canvas for a new run";
@@ -226,9 +227,28 @@
     } catch (error) { localError(error.message); }
     finally { busy = false; render(state); }
   }
+  const normalizedLabel = value => value.trim().replace(/\s+/g, " ").toLowerCase();
+  function launchCollection(reuseLabelRun = "") {
+    action("launch", {url: $("canvas-url").value.trim(), output: $("output").value.trim(), folder_label: $("folder-label").value.trim(), keep_browser_open: $("keep-canvas-open").checked, browser: $("browser").value, export_mode: $("mode-named").checked ? "named" : "coded", reuse_label_run_id: reuseLabelRun});
+  }
   $("setup").addEventListener("submit", event => {
     event.preventDefault();
-    action("launch", {url: $("canvas-url").value.trim(), output: $("output").value.trim(), folder_label: $("folder-label").value.trim(), keep_browser_open: $("keep-canvas-open").checked, browser: $("browser").value, export_mode: $("mode-named").checked ? "named" : "coded"});
+    if (busy) return;
+    if (state.run_id && normalizedLabel($("folder-label").value) === normalizedLabel(state.folder_label)) {
+      labelWarningRun = state.run_id;
+      $("previous-folder-label").textContent = state.folder_label.trim() || "(no quiz label)";
+      $("label-warning-dialog").showModal();
+      return;
+    }
+    launchCollection();
+  });
+  $("change-folder-label").addEventListener("click", () => {
+    $("label-warning-dialog").close();
+    $("folder-label").focus(); $("folder-label").select();
+  });
+  $("reuse-folder-label").addEventListener("click", () => {
+    $("label-warning-dialog").close();
+    launchCollection(labelWarningRun);
   });
   $("browse").addEventListener("click", async () => {
     $("browse").disabled = true; localError("");
